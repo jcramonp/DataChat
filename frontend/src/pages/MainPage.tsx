@@ -1,8 +1,13 @@
 import { useState } from "react";
 import "./MainPage.css";
 import { askData } from "../services/api";
+import type { AskResponse } from "../services/api";
 
-type Msg = { role: "user" | "assistant"; text: string };
+type Msg = { 
+  role: "user" | "assistant"; 
+  text: string; 
+  translation?: AskResponse["translation"] | null;
+};
 
 export default function MainPage() {
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -10,8 +15,8 @@ export default function MainPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const push = (role: Msg["role"], text: string) =>
-    setMessages((prev) => [...prev, { role, text }]);
+  const push = (msg: Msg) =>
+    setMessages((prev) => [...prev, msg]);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,14 +24,14 @@ export default function MainPage() {
     const q = input.trim();
     if (!q) return;
     setInput("");
-    push("user", q);
+    push({ role: "user", text: q });
     setLoading(true);
     try {
-      const { answer } = await askData(q);
-      push("assistant", answer);
-    } catch {
+      const { answer, translation } = await askData(q);
+      push({ role: "assistant", text: answer, translation });
+    } catch (err: any) {
       setError("No se pudo obtener respuesta del servidor.");
-      push("assistant", "⚠️ Error consultando el backend.");
+      push({ role: "assistant", text: "⚠️ Error consultando el backend." });
     } finally {
       setLoading(false);
     }
@@ -66,7 +71,60 @@ export default function MainPage() {
 
           <div className="chat-messages">
             {messages.map((m, i) => (
-              <div key={i} className={`msg ${m.role}`}>{m.text}</div>
+              <div key={i} className={`msg ${m.role}`}>
+                <div>{m.text}</div>
+
+                {/* US07: Mostrar query solo en respuestas del assistant */}
+                {m.role === "assistant" && m.translation?.text && (
+                  <details style={{ marginTop: 8 }}>
+                    <summary style={{ cursor: "pointer", fontWeight: "bold" }}>
+                      View Query{" "}
+                      <span
+                        style={{
+                          marginLeft: 6,
+                          fontSize: 12,
+                          background: "#ece7f5",
+                          color: "#4b3fb3",
+                          padding: "2px 6px",
+                          borderRadius: 8,
+                        }}
+                      >
+                        {m.translation.type.toUpperCase()}
+                      </span>
+                    </summary>
+                    <pre
+                      style={{
+                        background: "#0f172a",
+                        color: "#e2e8f0",
+                        padding: 10,
+                        borderRadius: 10,
+                        overflowX: "auto",
+                        marginTop: 6,
+                      }}
+                    >
+                      {m.translation.text}
+                    </pre>
+                    <button
+                      type="button"
+                      onClick={async () =>
+                        await navigator.clipboard.writeText(m.translation!.text)
+                      }
+                      style={{
+                        marginTop: 6,
+                        border: "none",
+                        borderRadius: 8,
+                        padding: "6px 12px",
+                        cursor: "pointer",
+                        background: "#f0ecfb",
+                        color: "#5a49d6",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Copy
+                    </button>
+                  </details>
+                )}
+              </div>
             ))}
             {loading && <div className="msg assistant">… DataChat is thinking</div>}
           </div>

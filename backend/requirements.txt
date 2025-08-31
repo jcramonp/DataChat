@@ -1,2 +1,10 @@
 fastapi
 uvicorn
+pydantic
+python-dotenv
+
+sqlalchemy
+aiosqlite            # para SQLite
+
+langchain
+langchain-community  # integra Ollama en LangChain

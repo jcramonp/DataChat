@@ -1,0 +1,22 @@
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Archivos de entorno
+.env
+.env.*
+
+# SQLite DB
+*.db
+
+# __pycache__
+__pycache__/
+*.pyc
+*.pyo
+
+# Node modules
+node_modules/
+
+# Vite/React build
+dist/
