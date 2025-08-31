@@ -1,11 +1,12 @@
-import { Link, useLocation } from "react-router-dom";
-import "./NavBar.css";
+import { Link, useLocation } from 'react-router-dom';
+
+import './NavBar.css';
 
 export default function NavBar() {
   const { pathname } = useLocation();
 
   const Tab = ({ to, children }: { to: string; children: React.ReactNode }) => (
-    <Link to={to} className={`nav-pill ${pathname === to ? "active" : ""}`}>
+    <Link to={to} className={`nav-pill ${pathname === to ? 'active' : ''}`}>
       {children}
     </Link>
   );

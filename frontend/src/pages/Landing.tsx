@@ -1,5 +1,6 @@
-import { Link } from "react-router-dom";
-import "./Landing.css";
+import { Link } from 'react-router-dom';
+
+import './Landing.css';
 
 export default function Landing() {
   return (
@@ -14,7 +15,9 @@ export default function Landing() {
           Convert Spanish questions to database queries instantly. Get clear
           answers without technical knowledge.
         </p>
-        <Link to="/main" className="cta-btn">Start Now</Link>
+        <Link to="/main" className="cta-btn">
+          Start Now
+        </Link>
       </section>
     </main>
   );
