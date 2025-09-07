@@ -34,7 +34,8 @@ Copia desde frontend/.env.example:
 
 ini
 VITE_API_URL=http://127.0.0.1:8000
-🐬 MySQL Demo
+
+##🐬 MySQL Demo
 La carpeta mysql_demo/ incluye un docker-compose.yml y mysql-init/01_init.sql que crea la base empresa_demo con datos de ejemplo.
 
 Levantar la DB
