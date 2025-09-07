@@ -1,0 +1,19 @@
+.landing-wrap { padding: 40px 16px; }
+.hero-card {
+  max-width: 1080px; margin: 0 auto; text-align: center;
+  background: radial-gradient(120% 120% at 20% -10%, #f3f1fb 0%, #efe9fb 35%, #e7f0ff 100%);
+  border: 1px solid #e7e3ef; border-radius: 20px;
+  padding: 48px 24px; box-shadow: 0 6px 18px rgba(20,30,60,.06);
+}
+.hero-logo { display: flex; align-items: center; gap: 12px; justify-content: center; }
+.hero-logo h1 { font-size: 48px; color: #1b57f1; margin: 0; font-weight: 900; }
+.hero-logo-icon { width: 60px; height: 60px; border-radius: 16px;
+  background: linear-gradient(135deg, #2f6bff, #c96df1); }
+.hero-title { margin: 16px 0 8px; font-size: 32px; color: #2f56ff; font-weight: 900; }
+.hero-sub { margin: 0 auto 28px; max-width: 720px; color: #515a78; }
+.cta-btn {
+  display: inline-block; padding: 16px 28px; border-radius: 16px;
+  color: #fff; text-decoration: none; font-weight: 800;
+  background: linear-gradient(135deg, #4b6bff, #f18be2);
+  box-shadow: 0 8px 16px rgba(90, 80, 200, .25);
+}
