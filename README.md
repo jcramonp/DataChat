@@ -12,9 +12,6 @@ modeloIADataChat/
 ├─ frontend/ # UI en React + Vite
 └─ mysql_demo/ # DB de prueba con Docker
 
-yaml
-Copy code
-
 ---
 
 ## ⚙️ Requisitos
