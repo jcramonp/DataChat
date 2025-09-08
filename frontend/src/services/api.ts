@@ -7,7 +7,10 @@ export type MySQLSource = { type: "mysql"; sqlalchemy_url: string };
 export type ExcelSource = { type: "excel"; path: string; sheet_name?: number | string | null };
 export type DataSource = MySQLSource | ExcelSource;
 
-export type TableData = { columns: string[]; rows: (string | number | null)[][] };
+export type TableData = {
+  columns: string[];
+  rows: (string | number | null)[][] };
+
 export type Generated = { type: "sql" | "pandas"; code: string };
 
 export type ChatResponse = {

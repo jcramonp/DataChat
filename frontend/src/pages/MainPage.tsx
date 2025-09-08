@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { askData } from '../services/api';
 import type { ChatResponse } from '../services/api';
 import './MainPage.css';
+import DataTable from '../components/DataTable';
 
 type Msg = {
   role: 'user' | 'assistant';
@@ -248,29 +249,56 @@ export default function MainPage() {
                     >
                       Copy
                     </button>
-
                     {m.table && m.table.columns?.length ? (
-                      <div style={{ marginTop: 10, overflowX: 'auto' }}>
-                        <table className="min-w-full border text-sm">
+                      <div style={{ marginTop: 12, overflowX: 'auto' }}>
+                        <table
+                            style={{
+                              borderCollapse: 'collapse',
+                              width: '100%',
+                              fontSize: '14px',
+                            }}
+                        >
                           <thead>
-                            <tr>
-                              {m.table.columns.map((c, i) => (
-                                <th key={i} className="border px-2 py-1 text-left">{c}</th>
-                              ))}
-                            </tr>
+                          <tr>
+                            {m.table.columns.map((c, i) => (
+                                <th
+                                    key={i}
+                                    style={{
+                                      border: '1px solid #e5e7eb',
+                                      padding: '8px',
+                                      textAlign: 'left',
+                                      fontWeight: 600,
+                                      background: '#f1f5f9',   // gris claro de fondo
+                                      color: '#111827',        // texto oscuro
+                                    }}
+                                >
+                                  {c}
+                                </th>
+                            ))}
+                          </tr>
                           </thead>
                           <tbody>
-                            {m.table.rows.map((r, ri) => (
+                          {m.table.rows.map((r, ri) => (
                               <tr key={ri}>
                                 {r.map((v, ci) => (
-                                  <td key={ci} className="border px-2 py-1">{String(v)}</td>
+                                    <td
+                                        key={ci}
+                                        style={{
+                                          border: '1px solid #f1f3f5',
+                                          padding: '6px 8px',
+                                          whiteSpace: 'nowrap',
+                                        }}
+                                    >
+                                      {v === null || v === undefined || v === '' ? '—' : String(v)}
+                                    </td>
                                 ))}
                               </tr>
-                            ))}
+                          ))}
                           </tbody>
                         </table>
                       </div>
                     ) : null}
+
                   </details>
                 )}
               </div>
@@ -282,7 +310,7 @@ export default function MainPage() {
 
           <form onSubmit={handleSend} className="chat-input">
             <input
-              value={input}
+                value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={lang === 'es' ? "¿Cuántos empleados hay en la sede 2?" : "How many employees are in site 2?"}
             />

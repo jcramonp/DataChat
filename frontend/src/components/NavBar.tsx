@@ -2,6 +2,8 @@ import { Link, useLocation } from 'react-router-dom';
 
 import './NavBar.css';
 
+import Logo from './Logo';
+
 export default function NavBar() {
   const { pathname } = useLocation();
 
@@ -15,8 +17,7 @@ export default function NavBar() {
     <header className="dc-nav">
       <div className="container nav-inner">
         <div className="dc-brand">
-          <div className="logo-box" aria-hidden />
-          <span className="brand-text">DataChat</span>
+          <Logo size={30} />
         </div>
 
         <nav className="dc-tabs">

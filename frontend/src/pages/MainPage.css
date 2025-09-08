@@ -96,3 +96,60 @@
 .connection-controls input[type="radio"] {
   accent-color: #4b6bff;
 }
+
+/* === Connection Card con gradiente y estilo bonito === */
+.chat-card {
+  background: linear-gradient(180deg, #f8f9ff 0%, #f5f0ff 100%) !important;
+  border: 1px solid #ebe7f7 !important;
+  border-radius: 16px !important;
+  padding: 20px !important;
+  box-shadow: 0 10px 30px rgba(100, 80, 200, .08) !important;
+}
+
+/* título */
+.chat-card h3 {
+  margin-top: 0;
+  font-weight: 800;
+  font-size: 18px;
+  color: #3b3dd1;
+}
+
+/* radios */
+.connection-controls {
+  background: #ffffffa6;
+  padding: 6px 10px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px #e9e6f6;
+}
+.connection-controls label {
+  font-weight: 600;
+  color: #374151;
+  padding: 4px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.connection-controls input[type="radio"] {
+  accent-color: #5b76ff;
+}
+
+/* inputs y selects */
+.chat-card input,
+.chat-card select {
+  background: #fff;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 12px !important;
+  padding: 10px 12px !important;
+}
+.chat-card input:focus,
+.chat-card select:focus {
+  outline: none;
+  border-color: #c3baf7 !important;
+  box-shadow: 0 0 0 3px rgba(100, 80, 200, .15);
+}
+
+/* hint */
+.chat-card .text-sm {
+  font-size: 13px;
+  color: #6b7280;
+}
+
