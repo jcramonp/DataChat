@@ -24,6 +24,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 # =========================
@@ -36,19 +37,25 @@ auth_scheme = HTTPBearer()
 print("[boot] app_min desde:", __file__)
 print("[exec_pandas] v2 cargada (sin locals())")
 
+
 def require_jwt(token: HTTPAuthorizationCredentials = Depends(auth_scheme)):
     try:
-        payload = jwt.decode(token.credentials, JWT_SECRET, algorithms=["HS256"])  # nosec - MVP
+        payload = jwt.decode(
+            token.credentials, JWT_SECRET, algorithms=["HS256"]
+        )  # nosec - MVP
         return payload
     except PyJWTError as e:
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 
+
 import json, re, unicodedata
+
 
 def _unwrap_code_block(s: str) -> str:
     s = s.strip()
     m = re.search(r"```(?:python)?\s*(.*?)\s*```", s, re.S | re.I)
     return m.group(1).strip() if m else s
+
 
 def parse_plan_json(s: str) -> dict:
     s = _unwrap_code_block(s).strip()
@@ -65,12 +72,14 @@ def parse_plan_json(s: str) -> dict:
             raise ValueError("PLAN no es un objeto JSON")
         return obj
 
+
 def _normalize(txt: str) -> str:
     # minúsculas, sin tildes, sin signos raros
     txt = txt.lower()
     txt = unicodedata.normalize("NFD", txt)
     txt = "".join(ch for ch in txt if unicodedata.category(ch) != "Mn")
     return txt
+
 
 def _detect_operation(qnorm: str) -> str:
     if any(w in qnorm for w in ["promedio", "media"]):
@@ -83,10 +92,23 @@ def _detect_operation(qnorm: str) -> str:
         return "min"
     if "mediana" in qnorm:
         return "median"
-    if any(w in qnorm for w in ["cuantos", "cuántos", "conteo", "contar", "numero de", "número de", "cantidad de", "total de"]):
+    if any(
+        w in qnorm
+        for w in [
+            "cuantos",
+            "cuántos",
+            "conteo",
+            "contar",
+            "numero de",
+            "número de",
+            "cantidad de",
+            "total de",
+        ]
+    ):
         return "count"
     # por defecto, si habla de "promedio" implícito
     return "mean"
+
 
 def _synonyms_map():
     # mapea sinónimos → columna canónica
@@ -96,6 +118,7 @@ def _synonyms_map():
         "salario": ["salario", "sueldo", "compensacion", "compensación", "pago"],
         "edad": ["edad", "anios", "años"],
     }
+
 
 def _find_columns_in_question(qnorm: str, available_cols: list[str]) -> dict:
     # devuelve {'genero': True, 'departamento': False, ...} según mencione sinónimos
@@ -109,15 +132,19 @@ def _find_columns_in_question(qnorm: str, available_cols: list[str]) -> dict:
                 break
     return hits
 
+
 def _pick_target_numeric(available_cols: list[str], dtypes: dict) -> str | None:
     # elige una columna numérica razonable si no se especifica
     for pref in ["salario", "edad"]:
-        if pref in available_cols and str(dtypes.get(pref, "")).startswith(("int", "float")):
+        if pref in available_cols and str(dtypes.get(pref, "")).startswith(
+            ("int", "float")
+        ):
             return pref
     for c in available_cols:
         if str(dtypes.get(c, "")).startswith(("int", "float")):
             return c
     return None
+
 
 def make_plan_rule_based(question: str, schema: dict) -> dict:
     """Construye un plan determinista si el LLM falla."""
@@ -144,10 +171,15 @@ def make_plan_rule_based(question: str, schema: dict) -> dict:
     target = None
     if op != "count":
         # si menciona salario explícitamente y existe
-        if "salario" in cols_norm and any(w in qnorm for w in ["salario", "sueldo", "compensacion", "compensación", "pago"]):
+        if "salario" in cols_norm and any(
+            w in qnorm
+            for w in ["salario", "sueldo", "compensacion", "compensación", "pago"]
+        ):
             target = cols[cols_norm.index("salario")]
         else:
-            target = _pick_target_numeric(cols_norm, { _normalize(k): v for k, v in dtypes.items() })
+            target = _pick_target_numeric(
+                cols_norm, {_normalize(k): v for k, v in dtypes.items()}
+            )
 
     return {
         "operation": op,
@@ -155,6 +187,7 @@ def make_plan_rule_based(question: str, schema: dict) -> dict:
         "target": target,
         "filters": [],
     }
+
 
 def build_pandas_expr(plan: dict) -> str:
     """
@@ -181,14 +214,23 @@ def build_pandas_expr(plan: dict) -> str:
                     val_repr = repr(val)
                 mask_parts.append(f"(df[{repr(col)}] {operator} {val_repr})")
             elif operator in ["in", "not in"]:
-                mask_parts.append(f"(df[{repr(col)}].isin({repr(val)}))" if operator == "in"
-                                  else f"(~df[{repr(col)}].isin({repr(val)}))")
+                mask_parts.append(
+                    f"(df[{repr(col)}].isin({repr(val)}))"
+                    if operator == "in"
+                    else f"(~df[{repr(col)}].isin({repr(val)}))"
+                )
             elif operator == "contains":
-                mask_parts.append(f"(df[{repr(col)}].astype(str).str.contains({repr(str(val))}, case=False, na=False))")
+                mask_parts.append(
+                    f"(df[{repr(col)}].astype(str).str.contains({repr(str(val))}, case=False, na=False))"
+                )
             elif operator == "startswith":
-                mask_parts.append(f"(df[{repr(col)}].astype(str).str.startswith({repr(str(val))}, na=False))")
+                mask_parts.append(
+                    f"(df[{repr(col)}].astype(str).str.startswith({repr(str(val))}, na=False))"
+                )
             elif operator == "endswith":
-                mask_parts.append(f"(df[{repr(col)}].astype(str).str.endswith({repr(str(val))}, na=False))")
+                mask_parts.append(
+                    f"(df[{repr(col)}].astype(str).str.endswith({repr(str(val))}, na=False))"
+                )
             # otros operadores: ignora silenciosamente
     mask_expr = " & ".join(mask_parts) if mask_parts else ""
 
@@ -209,9 +251,9 @@ def build_pandas_expr(plan: dict) -> str:
             return f"out = pd.DataFrame({{'count': [{base_df}.shape[0]]}})"
         agg_expr = {
             "mean": f"{base_df}[{repr(target)}].mean()",
-            "sum":  f"{base_df}[{repr(target)}].sum()",
-            "max":  f"{base_df}[{repr(target)}].max()",
-            "min":  f"{base_df}[{repr(target)}].min()",
+            "sum": f"{base_df}[{repr(target)}].sum()",
+            "max": f"{base_df}[{repr(target)}].max()",
+            "min": f"{base_df}[{repr(target)}].min()",
             "median": f"{base_df}[{repr(target)}].median()",
         }.get(op)
         if agg_expr is None:
@@ -248,10 +290,12 @@ def build_pandas_expr(plan: dict) -> str:
         f".reset_index(name='{op}_" + str(target) + "')"
     )
 
+
 # =========================
 # LLM
 # =========================
 # justo antes de crear el LLM
+
 
 # --- Parche anti base_url inválido (debe ir ANTES de crear el LLM) ---
 def _purge_openai_base_env():
@@ -260,18 +304,21 @@ def _purge_openai_base_env():
     cand_keys = (
         "OPENAI_API_BASE",
         "OPENAI_BASE_URL",
-        "OPENAI_BASE",           # por si acaso
-        "OPENAI_API_HOST",       # por si acaso
-        "OPENAI_ENDPOINT",       # algunos setups lo usan
-        "AZURE_OPENAI_ENDPOINT", # Azure
+        "OPENAI_BASE",  # por si acaso
+        "OPENAI_API_HOST",  # por si acaso
+        "OPENAI_ENDPOINT",  # algunos setups lo usan
+        "AZURE_OPENAI_ENDPOINT",  # Azure
     )
     for key in cand_keys:
         val = os.environ.get(key)
-        if val is not None and not val.strip().lower().startswith(("http://", "https://")):
+        if val is not None and not val.strip().lower().startswith(
+            ("http://", "https://")
+        ):
             removed.append((key, val))
             os.environ.pop(key, None)
     if removed:
         print("⚠️ Ignorando base_url inválido(s):", removed)
+
 
 _purge_openai_base_env()
 
@@ -280,8 +327,14 @@ from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import StrOutputParser
 
 # Si REALMENTE vas a usar proxy/Azure, debe empezar por http(s):
-_OPENAI_BASE = os.getenv("OPENAI_API_BASE") or os.getenv("OPENAI_BASE_URL") or os.getenv("AZURE_OPENAI_ENDPOINT")
-if not (_OPENAI_BASE and _OPENAI_BASE.strip().lower().startswith(("http://", "https://"))):
+_OPENAI_BASE = (
+    os.getenv("OPENAI_API_BASE")
+    or os.getenv("OPENAI_BASE_URL")
+    or os.getenv("AZURE_OPENAI_ENDPOINT")
+)
+if not (
+    _OPENAI_BASE and _OPENAI_BASE.strip().lower().startswith(("http://", "https://"))
+):
     _OPENAI_BASE = None
 
 _llm_kwargs = dict(
@@ -301,8 +354,6 @@ except Exception as _e:
     print("DEBUG no pude leer llm.client.base_url:", _e)
 
 
-
-
 # =========================
 # Pydantic I/O
 # =========================
@@ -317,17 +368,27 @@ _ALIAS_MAP = {
     "lte": "<=",
 }
 
+
 def _normalize_op(op: str) -> str:
     s = str(op).strip().lower()
     return _ALIAS_MAP.get(s, op)
+
 
 # --- filtro tipado (símbolos como dominio final) ---
 class Filter(BaseModel):
     column: str
     operator: Literal[
-        "==", "!=", ">", ">=", "<", "<=",
-        "in", "not in",
-        "contains", "startswith", "endswith"
+        "==",
+        "!=",
+        ">",
+        ">=",
+        "<",
+        "<=",
+        "in",
+        "not in",
+        "contains",
+        "startswith",
+        "endswith",
     ]
     value: Any
 
@@ -337,6 +398,7 @@ class Filter(BaseModel):
     def _before_operator(cls, v):
         return _normalize_op(v)
 
+
 # --- parser de filtros escritos como string ---
 def _parse_filter_string(s: str) -> Optional[Dict[str, Any]]:
     # soporta:
@@ -344,6 +406,7 @@ def _parse_filter_string(s: str) -> Optional[Dict[str, Any]]:
     # "col contains 'x'", "col startswith 'y'", "col endswith 'z'",
     # y también "col eq 'x'", "col gte 10", etc.
     import re, ast
+
     s = s.strip()
 
     # in / not in
@@ -388,6 +451,7 @@ def _parse_filter_string(s: str) -> Optional[Dict[str, Any]]:
 
     return None
 
+
 # --- plan tipado que acepta dicts o strings en filters y normaliza ---
 class PlanModel(BaseModel):
     operation: Literal["mean", "sum", "max", "min", "median", "count"]
@@ -418,6 +482,7 @@ class PlanModel(BaseModel):
             # otros tipos se ignoran silenciosamente (MVP)
         return out
 
+
 class MySQLSource(BaseModel):
     type: Literal["mysql"] = "mysql"
     sqlalchemy_url: str  # ej: mysql+pymysql://user:pass@host:3306/db
@@ -428,20 +493,25 @@ class ExcelSource(BaseModel):
     path: str
     sheet_name: int | str | None = 0
 
+
 DataSource = Annotated[Union[MySQLSource, ExcelSource], Field(discriminator="type")]
+
 
 class ChatOptions(BaseModel):
     language: Literal["es", "en"] = "es"
     max_rows: int = 200
+
 
 class ChatRequest(BaseModel):
     question: str
     datasource: DataSource
     options: ChatOptions = ChatOptions()
 
+
 class TableData(BaseModel):
     columns: List[str]
     rows: List[List[Any]]
+
 
 class ChatResponse(BaseModel):
     answer_text: str
@@ -449,12 +519,18 @@ class ChatResponse(BaseModel):
     table: Optional[TableData] = None
     notices: List[str] = []
 
+
 # =========================
 # Helpers: schema extraction
 # =========================
 
-def extract_mysql_schema(sqlalchemy_url: str, max_cols: int = 80, max_tables: int = 50) -> Dict[str, List[str]]:
-    engine = create_engine(sqlalchemy_url)
+
+def extract_mysql_schema(
+    sqlalchemy_url: str, max_cols: int = 80, max_tables: int = 50
+) -> Dict[str, List[str]]:
+    engine = create_engine(
+        sqlalchemy_url, connect_args={"charset": "utf8mb4"}, pool_pre_ping=True
+    )
     insp = inspect(engine)
     schema: Dict[str, List[str]] = {}
     for t in insp.get_table_names()[:max_tables]:
@@ -467,12 +543,18 @@ def extract_mysql_schema(sqlalchemy_url: str, max_cols: int = 80, max_tables: in
     return schema
 
 
-def extract_excel_schema(path: str, sheet_name: Optional[Union[int, str]] = 0, sample_rows: int = 2000) -> Dict[str, Any]:
+def extract_excel_schema(
+    path: str, sheet_name: Optional[Union[int, str]] = 0, sample_rows: int = 2000
+) -> Dict[str, Any]:
     if path.lower().endswith(".csv"):
         df = pd.read_csv(path, nrows=sample_rows)
     else:
         df = pd.read_excel(path, sheet_name=sheet_name, nrows=sample_rows)
-    return {"columns": list(df.columns), "dtypes": {c: str(df[c].dtype) for c in df.columns}}
+    return {
+        "columns": list(df.columns),
+        "dtypes": {c: str(df[c].dtype) for c in df.columns},
+    }
+
 
 # =========================
 # Prompting (few-shots mínimos; ajústalos a tu esquema real)
@@ -487,8 +569,10 @@ PLAN_SYSTEM = (
     "Usa solo columnas dadas. Sin texto extra, solo JSON."
 )
 
+
 def _escape_braces(s: str) -> str:
     return s.replace("{", "{{").replace("}", "}}")
+
 
 # Few-shots (las llaves del JSON se ESCAPAN para no romper la plantilla)
 PLAN_FEWSHOT_A = (
@@ -503,29 +587,41 @@ SAFE_PLAN_FEWSHOT_A = _escape_braces(PLAN_FEWSHOT_A)
 SAFE_PLAN_FEWSHOT_B = _escape_braces(PLAN_FEWSHOT_B)
 
 # Prompt “simple” (opcional, por si quieres sin few-shots)
-PLAN_PROMPT = ChatPromptTemplate.from_messages([
-    ("system", PLAN_SYSTEM),
-    ("human",
-     "Columnas disponibles: {columns}\n"
-     "Pregunta del usuario: {question}\n"
-     "Devuelve el plan estructurado con operation, group_by, target y filters.")
-])
+PLAN_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        ("system", PLAN_SYSTEM),
+        (
+            "human",
+            "Columnas disponibles: {columns}\n"
+            "Pregunta del usuario: {question}\n"
+            "Devuelve el plan estructurado con operation, group_by, target y filters.",
+        ),
+    ]
+)
 
 # Prompt con few-shots (recomendado)
-PLAN_PROMPT_FEWSHOT = ChatPromptTemplate.from_messages([
-    ("system", PLAN_SYSTEM),
-
-    # Ejemplo 1 (sin filtros)
-    ("human", "Columnas de ejemplo: ['genero','salario','departamento']\nPregunta: salario promedio por género"),
-    ("assistant", SAFE_PLAN_FEWSHOT_A),
-
-    # Ejemplo 2 (con un filtro)
-    ("human", "Columnas de ejemplo: ['genero','salario','departamento']\nPregunta: salario promedio por género solo en el departamento IT"),
-    ("assistant", SAFE_PLAN_FEWSHOT_B),
-
-    # Turno real
-    ("human", "Ahora responde SOLO con JSON. Columnas: {columns}\nPregunta: {question}")
-])
+PLAN_PROMPT_FEWSHOT = ChatPromptTemplate.from_messages(
+    [
+        ("system", PLAN_SYSTEM),
+        # Ejemplo 1 (sin filtros)
+        (
+            "human",
+            "Columnas de ejemplo: ['genero','salario','departamento']\nPregunta: salario promedio por género",
+        ),
+        ("assistant", SAFE_PLAN_FEWSHOT_A),
+        # Ejemplo 2 (con un filtro)
+        (
+            "human",
+            "Columnas de ejemplo: ['genero','salario','departamento']\nPregunta: salario promedio por género solo en el departamento IT",
+        ),
+        ("assistant", SAFE_PLAN_FEWSHOT_B),
+        # Turno real
+        (
+            "human",
+            "Ahora responde SOLO con JSON. Columnas: {columns}\nPregunta: {question}",
+        ),
+    ]
+)
 
 SQL_SYSTEM = (
     "Eres un traductor NL→SQL para MySQL. La pregunta puede estar en español o en inglés. "
@@ -598,7 +694,8 @@ SQL_PROMPT = ChatPromptTemplate.from_messages(
     [
         ("system", SQL_SYSTEM),
         ("human", "Esquema (tabla: [columnas]):\n{schema}\n\nPregunta: {question}"),
-    ] + _sql_fewshot_msgs
+    ]
+    + _sql_fewshot_msgs
 )
 
 # Construimos las parejas de mensajes para los few-shots de Pandas
@@ -611,20 +708,25 @@ PANDAS_PROMPT = ChatPromptTemplate.from_messages(
     [
         ("system", PANDAS_SYSTEM),
         ("human", "Columnas: {columns}\nTipos: {dtypes}\n\nPregunta: {question}"),
-    ] + _pandas_fewshot_msgs
+    ]
+    + _pandas_fewshot_msgs
 )
 
 
 # =========================
 # Guards
 # =========================
-FORBIDDEN_SQL = re.compile(r"\b(DELETE|UPDATE|INSERT|ALTER|DROP|TRUNCATE|CREATE|REPLACE)\b", re.I)
+FORBIDDEN_SQL = re.compile(
+    r"\b(DELETE|UPDATE|INSERT|ALTER|DROP|TRUNCATE|CREATE|REPLACE)\b", re.I
+)
 
 
 def sanitize_sql(q: str, limit: int) -> str:
     q = q.strip().strip(";")
     if FORBIDDEN_SQL.search(q):
-        raise HTTPException(status_code=400, detail="Operación SQL no permitida en el MVP")
+        raise HTTPException(
+            status_code=400, detail="Operación SQL no permitida en el MVP"
+        )
     if not re.match(r"^SELECT", q, re.I):
         # Fuerza solo SELECT en el MVP
         raise HTTPException(status_code=400, detail="Solo se permiten consultas SELECT")
@@ -647,9 +749,18 @@ def exec_pandas(code: str, df: pd.DataFrame) -> pd.DataFrame:
 
     env = {"df": df, "pd": pd}
     SAFE_BUILTINS = {
-        "abs": abs, "min": min, "max": max, "sum": sum, "len": len,
-        "sorted": sorted, "round": round, "range": range, "list": list,
-        "dict": dict, "set": set, "tuple": tuple,
+        "abs": abs,
+        "min": min,
+        "max": max,
+        "sum": sum,
+        "len": len,
+        "sorted": sorted,
+        "round": round,
+        "range": range,
+        "list": list,
+        "dict": dict,
+        "set": set,
+        "tuple": tuple,
         "locals": (lambda: env),  # evita NameError si algo llama locals()
     }
     GLOBALS = {"__builtins__": SAFE_BUILTINS}
@@ -679,7 +790,9 @@ def exec_pandas(code: str, df: pd.DataFrame) -> pd.DataFrame:
                 break
 
         if result is None:
-            raise ValueError("El código de Pandas no produjo salida; asigna un DataFrame a 'out'.")
+            raise ValueError(
+                "El código de Pandas no produjo salida; asigna un DataFrame a 'out'."
+            )
 
         if isinstance(result, pd.DataFrame):
             return result
@@ -691,37 +804,43 @@ def exec_pandas(code: str, df: pd.DataFrame) -> pd.DataFrame:
             return pd.DataFrame({"value": [result]})
 
 
-
-
-
-
 # =========================
 # Core: NL → (SQL|Pandas) → ejecutar
 # =========================
 
+
 def answer_mysql(question: str, source: MySQLSource, opts: ChatOptions) -> ChatResponse:
     schema = extract_mysql_schema(source.sqlalchemy_url)
-    prompt = SQL_PROMPT.format_messages(schema=json.dumps(schema, ensure_ascii=False), question=question)
+    prompt = SQL_PROMPT.format_messages(
+        schema=json.dumps(schema, ensure_ascii=False), question=question
+    )
     sql_code = (llm | parser).invoke(prompt)
     sql_code = sanitize_sql(sql_code, limit=opts.max_rows)
 
-    engine = create_engine(source.sqlalchemy_url)
+    engine = create_engine(
+        source.sqlalchemy_url, connect_args={"charset": "utf8mb4"}, pool_pre_ping=True
+    )
     try:
         with engine.connect() as conn:
             res = conn.execute(text(sql_code))
             rows = res.fetchall()
             cols = list(res.keys())
     except SQLAlchemyError as e:
-        raise HTTPException(status_code=400, detail=f"Error SQL: {str(e)} | Query: {sql_code}")
+        raise HTTPException(
+            status_code=400, detail=f"Error SQL: {str(e)} | Query: {sql_code}"
+        )
     finally:
         engine.dispose()
 
     df = pd.DataFrame(rows, columns=cols)
-    table = TableData(columns=cols, rows=df.astype(object).where(pd.notnull(df), None).values.tolist())
+    table = TableData(
+        columns=cols, rows=df.astype(object).where(pd.notnull(df), None).values.tolist()
+    )
 
     answer_text = (
         f"Mostrando {len(table.rows)} fila(s)."
-        if opts.language == "es" else f"Showing {len(table.rows)} row(s)."
+        if opts.language == "es"
+        else f"Showing {len(table.rows)} row(s)."
     )
 
     return ChatResponse(
@@ -734,22 +853,24 @@ def answer_mysql(question: str, source: MySQLSource, opts: ChatOptions) -> ChatR
 
 def answer_excel(question: str, source: ExcelSource, opts: ChatOptions) -> ChatResponse:
     # 0) Carga de datos y esquema
-    df = pd.read_csv(source.path) if source.path.lower().endswith(".csv") else pd.read_excel(
-        source.path, sheet_name=source.sheet_name
+    df = (
+        pd.read_csv(source.path)
+        if source.path.lower().endswith(".csv")
+        else pd.read_excel(source.path, sheet_name=source.sheet_name)
     )
     schema = extract_excel_schema(source.path, sheet_name=source.sheet_name)
 
     # 1) PLAN por LLM tipado (structured output) con fallback a reglas
     try:
         # 👇 Fuerza el método clásico de function calling (evita el error de schema estricto)
-        structured = PLAN_PROMPT_FEWSHOT | llm.with_structured_output(PlanModel, method="function_calling")
-        plan_obj: PlanModel = structured.invoke({
-            "columns": schema["columns"],
-            "question": question
-        })
+        structured = PLAN_PROMPT_FEWSHOT | llm.with_structured_output(
+            PlanModel, method="function_calling"
+        )
+        plan_obj: PlanModel = structured.invoke(
+            {"columns": schema["columns"], "question": question}
+        )
         plan = plan_obj.dict()
         print("DEBUG PLAN (LLM):", plan)
-
 
     except Exception as e:
         print("WARN: PLAN LLM falló, usando plan por reglas:", e)
@@ -779,7 +900,7 @@ def answer_excel(question: str, source: ExcelSource, opts: ChatOptions) -> ChatR
     except Exception as e:
         raise HTTPException(
             status_code=400,
-            detail=f"Error ejecutando Pandas: {str(e)} | Código: {py_code}"
+            detail=f"Error ejecutando Pandas: {str(e)} | Código: {py_code}",
         )
 
     # 5) Limitar y empaquetar respuesta
@@ -788,11 +909,12 @@ def answer_excel(question: str, source: ExcelSource, opts: ChatOptions) -> ChatR
 
     table = TableData(
         columns=[str(c) for c in out.columns],
-        rows=out.astype(object).where(pd.notnull(out), None).values.tolist()
+        rows=out.astype(object).where(pd.notnull(out), None).values.tolist(),
     )
 
     answer_text = (
-        f"Mostrando {len(table.rows)} fila(s)." if opts.language == "es"
+        f"Mostrando {len(table.rows)} fila(s)."
+        if opts.language == "es"
         else f"Showing {len(table.rows)} row(s)."
     )
 
@@ -802,7 +924,6 @@ def answer_excel(question: str, source: ExcelSource, opts: ChatOptions) -> ChatR
         table=table,
         notices=[],
     )
-
 
 
 # =========================
@@ -817,6 +938,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest, _: dict = Depends(require_jwt)):
     if req.datasource.type == "mysql":
@@ -826,11 +948,13 @@ def chat(req: ChatRequest, _: dict = Depends(require_jwt)):
     else:
         raise HTTPException(status_code=400, detail="Datasource no soportado")
 
+
 # =========================
 # Quick self-test (solo si ejecutas: python app.py)
 # =========================
 if __name__ == "__main__":
     import os
+
     os.environ.setdefault("JWT_SECRET", "dev")
     # Prueba local con Excel (ajusta la ruta):
     if os.path.exists("./empleados.csv"):
@@ -840,4 +964,6 @@ if __name__ == "__main__":
         )
         print(chat(req, _={}))
     else:
-        print("Crea ./empleados.csv con columnas: genero,salario,departamento … para la prueba rápida.")
+        print(
+            "Crea ./empleados.csv con columnas: genero,salario,departamento … para la prueba rápida."
+        )

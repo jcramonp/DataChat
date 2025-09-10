@@ -1,14 +1,18 @@
 # Python
+venv/
+.venv/
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.pyd
 *.egg-info/
 dist/
 build/
+.coverage
+.pytest_cache/
+.mypy_cache/
 
 # Virtual env
-venv/
 .env
 *.env
 
@@ -28,3 +32,25 @@ data/*
 !.env.example
 
 app.py
+
+# --- Bases de datos / datasets ---
+*.sql
+*.dump
+*.db
+*.sqlite*
+*.bak
+*.csv
+*.tsv
+*.xlsx
+*.xls
+*.parquet
+/data/**
+/datasets/**
+/tmp/**
+/mysql_demo*.zip
+/mysql_demo*/**
+.prettierignore
+.prettierrc
+docker-compose.yml
+01.init.sql
+mysql_demo.zip
