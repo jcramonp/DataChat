@@ -1,0 +1,50 @@
+.dc-nav {
+  background: transparent;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.nav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-block: 10px;
+}
+
+.dc-tabs {
+  display: flex;
+  gap: 10px;
+  background: #ece7f5;
+  padding: 6px;
+  border-radius: 20px;
+}
+
+.brand-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  color: #fff;
+  font-weight: 800;
+  background: linear-gradient(135deg, #5b76ff, #d978f2);
+  box-shadow:
+    0 6px 18px rgba(100, 80, 200, 0.25),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+.nav-pill {
+  padding: 8px 14px;
+  border-radius: 16px;
+  text-decoration: none;
+  font-weight: 600;
+  color: #40455b;
+  background: #fff;
+}
+
+.nav-pill.active {
+  color: #fff;
+  background: linear-gradient(135deg, #5b76ff, #d978f2);
+  box-shadow: 0 3px 10px rgba(100, 80, 200, 0.25);
+}
