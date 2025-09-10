@@ -1,0 +1,25 @@
+# dependencias y builds
+node_modules/
+dist/
+build/
+.vite/
+
+# IDE / SO
+.vscode/
+.idea/
+.DS_Store
+
+# backend y datos
+venv/
+.venv/
+__pycache__/
+*.log
+*.sql
+*.csv
+*.xlsx
+*.sqlite*
+data/
+datasets/
+tmp/
+mysql_demo/
+mysql_demo1/
