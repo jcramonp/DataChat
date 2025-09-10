@@ -56,3 +56,38 @@
 .mt-32 {
   margin-top: 32px;
 }
+
+/* Header de la tarjeta de conexión */
+.conn-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+/* Botón mostrar/ocultar */
+.toggle-btn {
+  border: none;
+  background: #f0ecfb;
+  color: #5a49d6;
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Cuerpo colapsable con animación */
+.conn-body {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition:
+    max-height 260ms ease,
+    opacity 200ms ease;
+}
+
+/* Cuando está abierto */
+.conn-body.open {
+  max-height: 1200px; /* suficientemente grande para el contenido */
+  opacity: 1;
+}

@@ -1,13 +1,13 @@
-import React from "react";
+import React from 'react';
 
 type Props = {
-  size?: number;        // alto del ícono
-  withText?: boolean;   // mostrar "DataChat" a la derecha
+  size?: number; // alto del ícono
+  withText?: boolean; // mostrar "DataChat" a la derecha
 };
 
 export default function Logo({ size = 28, withText = true }: Props) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
       {/* Ícono tipo “burbuja de chat” con barras y degradado */}
       <svg
         width={size}
@@ -37,10 +37,10 @@ export default function Logo({ size = 28, withText = true }: Props) {
             fontWeight: 800,
             fontSize: 20,
             lineHeight: 1,
-            background: "linear-gradient(90deg, #2F6BFF, #9B6BFF)",
-            WebkitBackgroundClip: "text",
-            backgroundClip: "text",
-            color: "transparent",
+            background: 'linear-gradient(90deg, #2F6BFF, #9B6BFF)',
+            WebkitBackgroundClip: 'text',
+            backgroundClip: 'text',
+            color: 'transparent',
           }}
         >
           DataChat

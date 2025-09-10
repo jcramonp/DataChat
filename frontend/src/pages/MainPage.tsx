@@ -19,19 +19,25 @@ export default function MainPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const [showConn, setShowConn] = useState(false);
+
   // conexión / opciones
-  const [token, setToken] = useState('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1IjoiZGVtbyJ9.fZAPV-j6IYbQh3LiJirVqWIo5y5HqXkwFB3APoyhr9c');
+  const [token, setToken] = useState(
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1IjoiZGVtbyJ9.fZAPV-j6IYbQh3LiJirVqWIo5y5HqXkwFB3APoyhr9c',
+  );
   const [lang, setLang] = useState<'es' | 'en'>('es');
   const [source, setSource] = useState<SourceType>('mysql');
 
   // MySQL
-  const [sqlUrl, setSqlUrl] = useState('mysql+pymysql://app:app@localhost:3306/empresa_demo');
+  const [sqlUrl, setSqlUrl] = useState(
+    'mysql+pymysql://app:app@localhost:3306/empresa_demo?charset=utf8mb4',
+  );
 
   // Excel
   const [excelPath, setExcelPath] = useState('C:/data/empleados.xlsx'); // ruta visible por el servidor (MVP)
   const [sheetName, setSheetName] = useState<string | number | undefined>(0);
 
-  const pushMessage = (m: Msg) => setMessages((prev) => [...prev, m]);
+  const pushMessage = (m: Msg) => setMessages(prev => [...prev, m]);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,15 +81,15 @@ export default function MainPage() {
         <div className="container center">
           <h1 className="hero-title">Ask Your Data Anything</h1>
           <p className="hero-sub">
-            Get Instant insights from your company database using natural language. No
-            SQL-Excel knowledge required
+            Get Instant insights from your company database using natural language. No SQL-Excel
+            knowledge required
           </p>
           <div className="suggestions">
             {[
               'How many employees joined this year?',
               'Show me sales by region',
               'Which customers have the highest orders',
-            ].map((s) => (
+            ].map(s => (
               <button key={s} type="button" onClick={() => setInput(s)}>
                 {s}
               </button>
@@ -93,98 +99,148 @@ export default function MainPage() {
       </section>
 
       {/* PANEL DE CONEXIÓN */}
+      {/* PANEL DE CONEXIÓN (colapsable) */}
       <section className="container mt-16">
         <div className="chat-card" style={{ borderTop: '1px solid #e7e3ef', borderRadius: 16 }}>
-          <h3 style={{ marginTop: 0 }}>Connection</h3>
+          <div className="conn-header">
+            <h3 style={{ marginTop: 0 }}>Connection</h3>
+            <button
+              type="button"
+              className="toggle-btn"
+              onClick={() => setShowConn(s => !s)}
+              aria-expanded={showConn}
+              aria-controls="conn-body"
+              title={showConn ? 'Hide' : 'Show'}
+            >
+              {showConn ? 'Hide' : 'Show'}
+            </button>
+          </div>
 
-          {/* Selección de origen */}
-          {/* Selección de origen */}
-          <div className="connection-controls" style={{ display: 'flex', gap: 12, margin: '10px 0' }}>
-            <label>
-              <input
+          <div
+            id="conn-body"
+            className={`conn-body ${showConn ? 'open' : 'closed'}`}
+            aria-hidden={!showConn}
+          >
+            {/* Selección de origen */}
+            <div
+              className="connection-controls"
+              style={{ display: 'flex', gap: 12, margin: '10px 0' }}
+            >
+              <label>
+                <input
                   type="radio"
                   name="source"
                   value="mysql"
                   checked={source === 'mysql'}
                   onChange={() => setSource('mysql')}
-              />
-              MySQL
-            </label>
-            <label>
-              <input
+                />
+                MySQL
+              </label>
+              <label>
+                <input
                   type="radio"
                   name="source"
                   value="excel"
                   checked={source === 'excel'}
                   onChange={() => setSource('excel')}
-              />
-              Excel
-            </label>
-          </div>
+                />
+                Excel
+              </label>
+            </div>
 
-
-          {/* Campos comunes */}
-          <div style={{ display: 'grid', gap: 10 }}>
-            <label className="text-sm">
-              JWT
-              <input
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                placeholder="Bearer token"
-                style={{ width: '100%', padding: 10, borderRadius: 10, border: '1px solid #d9d9e3', marginTop: 6 }}
-              />
-            </label>
-
-            <label className="text-sm">
-              Language
-              <select
-                value={lang}
-                onChange={(e) => setLang(e.target.value as 'es' | 'en')}
-                style={{ width: '100%', padding: 10, borderRadius: 10, border: '1px solid #d9d9e3', marginTop: 6 }}
-              >
-                <option value="es">Español</option>
-                <option value="en">English</option>
-              </select>
-            </label>
-
-            {source === 'mysql' ? (
+            {/* Campos comunes */}
+            <div style={{ display: 'grid', gap: 10 }}>
               <label className="text-sm">
-                SQLAlchemy URL
+                JWT
                 <input
-                  value={sqlUrl}
-                  onChange={(e) => setSqlUrl(e.target.value)}
-                  placeholder="mysql+pymysql://user:pass@host:3306/db"
-                  style={{ width: '100%', padding: 10, borderRadius: 10, border: '1px solid #d9d9e3', marginTop: 6 }}
+                  value={token}
+                  onChange={e => setToken(e.target.value)}
+                  placeholder="Bearer token"
+                  style={{
+                    width: '100%',
+                    padding: 10,
+                    borderRadius: 10,
+                    border: '1px solid #d9d9e3',
+                    marginTop: 6,
+                  }}
                 />
               </label>
-            ) : (
-              <>
+
+              <label className="text-sm">
+                Language
+                <select
+                  value={lang}
+                  onChange={e => setLang(e.target.value as 'es' | 'en')}
+                  style={{
+                    width: '100%',
+                    padding: 10,
+                    borderRadius: 10,
+                    border: '1px solid #d9d9e3',
+                    marginTop: 6,
+                  }}
+                >
+                  <option value="es">Español</option>
+                  <option value="en">English</option>
+                </select>
+              </label>
+
+              {source === 'mysql' ? (
                 <label className="text-sm">
-                  Excel path (server-visible)
+                  SQLAlchemy URL
                   <input
-                    value={excelPath}
-                    onChange={(e) => setExcelPath(e.target.value)}
-                    placeholder="C:/data/empleados.xlsx"
-                    style={{ width: '100%', padding: 10, borderRadius: 10, border: '1px solid #d9d9e3', marginTop: 6 }}
-                  />
-                </label>
-                <label className="text-sm">
-                  Sheet name / index (opcional)
-                  <input
-                    value={String(sheetName ?? '')}
-                    onChange={(e) => {
-                      const s = e.target.value;
-                      setSheetName(s === '' ? undefined : (isNaN(Number(s)) ? s : Number(s)));
+                    value={sqlUrl}
+                    onChange={e => setSqlUrl(e.target.value)}
+                    placeholder="mysql+pymysql://user:pass@host:3306/db"
+                    style={{
+                      width: '100%',
+                      padding: 10,
+                      borderRadius: 10,
+                      border: '1px solid #d9d9e3',
+                      marginTop: 6,
                     }}
-                    placeholder="0"
-                    style={{ width: '100%', padding: 10, borderRadius: 10, border: '1px solid #d9d9e3', marginTop: 6 }}
                   />
                 </label>
-                <div className="text-sm" style={{ color: '#6b7280' }}>
-                  * En este MVP el backend lee el archivo desde una ruta local del servidor.
-                </div>
-              </>
-            )}
+              ) : (
+                <>
+                  <label className="text-sm">
+                    Excel path (server-visible)
+                    <input
+                      value={excelPath}
+                      onChange={e => setExcelPath(e.target.value)}
+                      placeholder="C:/data/empleados.xlsx"
+                      style={{
+                        width: '100%',
+                        padding: 10,
+                        borderRadius: 10,
+                        border: '1px solid #d9d9e3',
+                        marginTop: 6,
+                      }}
+                    />
+                  </label>
+                  <label className="text-sm">
+                    Sheet name / index (opcional)
+                    <input
+                      value={String(sheetName ?? '')}
+                      onChange={e => {
+                        const s = e.target.value;
+                        setSheetName(s === '' ? undefined : isNaN(Number(s)) ? s : Number(s));
+                      }}
+                      placeholder="0"
+                      style={{
+                        width: '100%',
+                        padding: 10,
+                        borderRadius: 10,
+                        border: '1px solid #d9d9e3',
+                        marginTop: 6,
+                      }}
+                    />
+                  </label>
+                  <div className="text-sm" style={{ color: '#6b7280' }}>
+                    * En este MVP el backend lee el archivo desde una ruta local del servidor.
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </section>
@@ -195,7 +251,9 @@ export default function MainPage() {
           <div className="chat-header">
             <h3>DataChat Assistant</h3>
             <div className="chat-actions">
-              <button type="button" title="New Chat" onClick={() => setMessages([])}>＋</button>
+              <button type="button" title="New Chat" onClick={() => setMessages([])}>
+                ＋
+              </button>
             </div>
           </div>
 
@@ -252,53 +310,52 @@ export default function MainPage() {
                     {m.table && m.table.columns?.length ? (
                       <div style={{ marginTop: 12, overflowX: 'auto' }}>
                         <table
-                            style={{
-                              borderCollapse: 'collapse',
-                              width: '100%',
-                              fontSize: '14px',
-                            }}
+                          style={{
+                            borderCollapse: 'collapse',
+                            width: '100%',
+                            fontSize: '14px',
+                          }}
                         >
                           <thead>
-                          <tr>
-                            {m.table.columns.map((c, i) => (
+                            <tr>
+                              {m.table.columns.map((c, i) => (
                                 <th
-                                    key={i}
-                                    style={{
-                                      border: '1px solid #e5e7eb',
-                                      padding: '8px',
-                                      textAlign: 'left',
-                                      fontWeight: 600,
-                                      background: '#f1f5f9',   // gris claro de fondo
-                                      color: '#111827',        // texto oscuro
-                                    }}
+                                  key={i}
+                                  style={{
+                                    border: '1px solid #e5e7eb',
+                                    padding: '8px',
+                                    textAlign: 'left',
+                                    fontWeight: 600,
+                                    background: '#f1f5f9', // gris claro de fondo
+                                    color: '#111827', // texto oscuro
+                                  }}
                                 >
                                   {c}
                                 </th>
-                            ))}
-                          </tr>
+                              ))}
+                            </tr>
                           </thead>
                           <tbody>
-                          {m.table.rows.map((r, ri) => (
+                            {m.table.rows.map((r, ri) => (
                               <tr key={ri}>
                                 {r.map((v, ci) => (
-                                    <td
-                                        key={ci}
-                                        style={{
-                                          border: '1px solid #f1f3f5',
-                                          padding: '6px 8px',
-                                          whiteSpace: 'nowrap',
-                                        }}
-                                    >
-                                      {v === null || v === undefined || v === '' ? '—' : String(v)}
-                                    </td>
+                                  <td
+                                    key={ci}
+                                    style={{
+                                      border: '1px solid #f1f3f5',
+                                      padding: '6px 8px',
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    {v === null || v === undefined || v === '' ? '—' : String(v)}
+                                  </td>
                                 ))}
                               </tr>
-                          ))}
+                            ))}
                           </tbody>
                         </table>
                       </div>
                     ) : null}
-
                   </details>
                 )}
               </div>
@@ -310,11 +367,17 @@ export default function MainPage() {
 
           <form onSubmit={handleSend} className="chat-input">
             <input
-                value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={lang === 'es' ? "¿Cuántos empleados hay en la sede 2?" : "How many employees are in site 2?"}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              placeholder={
+                lang === 'es'
+                  ? '¿Cuántos empleados hay en la sede 2?'
+                  : 'How many employees are in site 2?'
+              }
             />
-            <button type="submit" disabled={loading}>{loading ? 'Sending…' : 'Send'}</button>
+            <button type="submit" disabled={loading}>
+              {loading ? 'Sending…' : 'Send'}
+            </button>
           </form>
         </div>
       </section>

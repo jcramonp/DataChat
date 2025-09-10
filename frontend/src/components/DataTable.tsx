@@ -1,6 +1,6 @@
 // frontend/src/components/DataTable.tsx
-import { useMemo, useState } from "react";
-import "./DataTable.css";
+import { useMemo, useState } from 'react';
+import './DataTable.css';
 
 type Props = {
   columns: string[];
@@ -15,7 +15,7 @@ export default function DataTable({
   rows,
   pageSizeOptions = [5, 10, 20, 50],
   defaultPageSize = 10,
-  className = "",
+  className = '',
 }: Props) {
   const [page, setPage] = useState(1); // 1-indexed
   const [pageSize, setPageSize] = useState(defaultPageSize);
@@ -44,12 +44,12 @@ export default function DataTable({
             Filas por página:&nbsp;
             <select
               value={pageSize}
-              onChange={(e) => {
+              onChange={e => {
                 setPageSize(Number(e.target.value));
                 setPage(1);
               }}
             >
-              {pageSizeOptions.map((opt) => (
+              {pageSizeOptions.map(opt => (
                 <option key={opt} value={opt}>
                   {opt}
                 </option>
@@ -74,7 +74,7 @@ export default function DataTable({
               min={1}
               max={totalPages}
               value={page}
-              onChange={(e) => go(Number(e.target.value))}
+              onChange={e => go(Number(e.target.value))}
             />
             &nbsp;/ {totalPages}
           </span>
@@ -91,7 +91,7 @@ export default function DataTable({
         <table className="dt-table">
           <thead>
             <tr>
-              {columns.map((c) => (
+              {columns.map(c => (
                 <th key={c} title={c}>
                   {c}
                 </th>
@@ -110,8 +110,7 @@ export default function DataTable({
                 <tr key={idx}>
                   {columns.map((_, i) => {
                     const v = row[i];
-                    const val =
-                      v === null || v === undefined || v === "" ? "—" : String(v);
+                    const val = v === null || v === undefined || v === '' ? '—' : String(v);
                     return <td key={i}>{val}</td>;
                   })}
                 </tr>
