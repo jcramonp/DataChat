@@ -4,6 +4,7 @@ import App from './App';
 import Landing from './pages/Landing';
 import MainPage from './pages/MainPage';
 import NotFound from './pages/NotFound';
+import Login from './pages/Login';          // <- AÑADIR
 
 export const router = createBrowserRouter([
   {
@@ -12,6 +13,7 @@ export const router = createBrowserRouter([
     errorElement: <NotFound />,
     children: [
       { index: true, element: <Landing /> },
+      { path: 'login', element: <Login /> }, // <- AÑADIR
       { path: 'main', element: <MainPage /> },
     ],
   },

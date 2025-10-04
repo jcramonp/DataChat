@@ -23,9 +23,106 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
+from datetime import datetime, timedelta, timezone
+from passlib.context import CryptContext
+
 from dotenv import load_dotenv
 
 load_dotenv()
+
+app = FastAPI(title="DataChatbot MVP", version="0.1.0")
+
+
+JWT_SECRET = "supersecret"   # ⚠️ cambia esto por algo seguro
+JWT_ALG = "HS256"
+JWT_EXPIRE_MINUTES = 120
+pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# --- Usuarios en memoria (MVP) ---
+_users = {
+    "admin@datac.chat": {
+        "password_hash": pwd_ctx.hash("admin123"),
+        "role": "admin"
+    },
+    "user@datac.chat": {
+        "password_hash": pwd_ctx.hash("user123"),
+        "role": "user"
+    },
+}
+
+auth_scheme = HTTPBearer(auto_error=True)
+
+def require_jwt(credentials: HTTPAuthorizationCredentials = Depends(auth_scheme)) -> dict:
+    """
+    Lee el header Authorization: Bearer <token>, decodifica el JWT y retorna el payload.
+    Lanza 401 si el token falta o es inválido/expirado.
+    """
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+        # payload esperado: {"sub": email, "role": "...", "exp": ...}
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expirado")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
+
+def create_jwt(sub: str, role: str, extra: dict | None = None) -> str:
+    payload = {
+        "sub": sub,
+        "role": role,
+        "iat": int(datetime.now(tz=timezone.utc).timestamp()),
+        "exp": int((datetime.now(tz=timezone.utc) + timedelta(minutes=JWT_EXPIRE_MINUTES)).timestamp()),
+    }
+    if extra:
+        payload.update(extra)
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
+
+def get_current_user(payload: dict = Depends(require_jwt)) -> dict:
+    # require_jwt ya decodifica y devuelve el payload
+    # aquí podrías reconfirmar contra DB si quieres (revocaciones, is_active, etc.)
+    return {"email": payload.get("sub"), "role": payload.get("role")}
+
+def require_roles(roles: list[str]):
+    def _dep(user: dict = Depends(get_current_user)):
+        if user.get("role") not in roles:
+            raise HTTPException(status_code=403, detail="Forbidden: insufficient role")
+        return user
+    return _dep
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    role: Literal["user", "admin"] = "user"
+
+@app.post("/auth/login")
+def auth_login(req: LoginRequest):
+    u = _users.get(req.email.lower().strip())
+    if not u or not pwd_ctx.verify(req.password, u["password_hash"]):
+        raise HTTPException(status_code=401, detail="Credenciales inválidas")
+    token = create_jwt(sub=req.email, role=u["role"])
+    return {"access_token": token, "token_type": "bearer", "role": u["role"]}
+
+@app.post("/auth/register")
+def auth_register(req: RegisterRequest, _: dict = Depends(require_roles(["admin"]))):
+    email = req.email.lower().strip()
+    if email in _users:
+        raise HTTPException(status_code=400, detail="El usuario ya existe")
+    _users[email] = {"password_hash": pwd_ctx.hash(req.password), "role": req.role}
+    return {"ok": True, "email": email, "role": req.role}
+
+@app.get("/auth/me")
+def auth_me(user=Depends(get_current_user)):
+    return user
+
+@app.get("/admin/ping")
+def admin_ping(_: dict = Depends(require_roles(["admin"]))):
+    return {"ok": True, "msg": "pong (admin)"}
+
 
 # =========================
 # Auth (MVP)
