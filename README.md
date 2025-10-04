@@ -1,7 +1,7 @@
 # DataChat 🗄️🤖
 
-Chatbot que permite consultar datos de **MySQL** o **Excel** con lenguaje natural (ES/EN).  
-Convierte preguntas en SQL o comandos Pandas, ejecuta y devuelve **respuesta + tabla + query generado**.
+Chatbot that allows you to query data from **MySQL** or **Excel** using natural language (ES/EN).  
+Converts questions into SQL or Pandas commands, executes them, and returns the **response + table + generated query**.
 
 ---
 
