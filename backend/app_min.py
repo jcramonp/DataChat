@@ -1,71 +1,60 @@
 from __future__ import annotations
-import os
-import json
-import re
+import os, json, re
 from typing import Any, Dict, List, Optional, Tuple, Literal, Union, Annotated
+from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
-
-from starlette.middleware.cors import CORSMiddleware
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
 
 import jwt
 from jwt import PyJWTError
 
-from sqlalchemy import create_engine, text, inspect
+from sqlalchemy import Column, String, Boolean, create_engine, text, inspect
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from sqlalchemy.exc import SQLAlchemyError
 
 import pandas as pd
-
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-
-from datetime import datetime, timedelta, timezone
+from dotenv import load_dotenv
 from passlib.context import CryptContext
 
-from dotenv import load_dotenv
-
+# ========= Env & App =========
 load_dotenv()
-
 app = FastAPI(title="DataChatbot MVP", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-
-JWT_SECRET = "supersecret"   # ⚠️ cambia esto por algo seguro
+# ========= Seguridad / JWT =========
+JWT_SECRET = os.getenv("JWT_SECRET", "dev")     # cámbialo en prod
 JWT_ALG = "HS256"
 JWT_EXPIRE_MINUTES = 120
-pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# --- Usuarios en memoria (MVP) ---
-_users = {
-    "admin@datac.chat": {
-        "password_hash": pwd_ctx.hash("admin123"),
-        "role": "admin"
-    },
-    "user@datac.chat": {
-        "password_hash": pwd_ctx.hash("user123"),
-        "role": "user"
-    },
-}
+# Usa Argon2 (evita líos de bcrypt en Windows)
+pwd_ctx = CryptContext(schemes=["argon2"], deprecated="auto")
 
 auth_scheme = HTTPBearer(auto_error=True)
 
+# ========= Persistencia de usuarios (SQLite) =========
+DB_URL = os.getenv("AUTH_DB_URL", "sqlite:///./auth.db")
+
 def require_jwt(credentials: HTTPAuthorizationCredentials = Depends(auth_scheme)) -> dict:
-    """
-    Lee el header Authorization: Bearer <token>, decodifica el JWT y retorna el payload.
-    Lanza 401 si el token falta o es inválido/expirado.
-    """
     token = credentials.credentials
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
-        # payload esperado: {"sub": email, "role": "...", "exp": ...}
-        return payload
+        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expirado")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
+    except (jwt.InvalidTokenError, PyJWTError) as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Token inválido: {e}")
 
 def create_jwt(sub: str, role: str, extra: dict | None = None) -> str:
     payload = {
@@ -79,8 +68,6 @@ def create_jwt(sub: str, role: str, extra: dict | None = None) -> str:
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
 
 def get_current_user(payload: dict = Depends(require_jwt)) -> dict:
-    # require_jwt ya decodifica y devuelve el payload
-    # aquí podrías reconfirmar contra DB si quieres (revocaciones, is_active, etc.)
     return {"email": payload.get("sub"), "role": payload.get("role")}
 
 def require_roles(roles: list[str]):
@@ -90,6 +77,45 @@ def require_roles(roles: list[str]):
         return user
     return _dep
 
+# ========= Persistencia de usuarios (SQLite) =========
+DB_URL = os.getenv("AUTH_DB_URL", "sqlite:///./auth.db")
+engine = create_engine(DB_URL, connect_args={"check_same_thread": False} if DB_URL.startswith("sqlite") else {})
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+Base = declarative_base()
+
+class User(Base):
+    __tablename__ = "users"
+    email = Column(String, primary_key=True, index=True)
+    password_hash = Column(String, nullable=False)
+    role = Column(String, default="user")  # "user" | "admin"
+    is_active = Column(Boolean, default=True)
+
+Base.metadata.create_all(bind=engine)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+def seed_admin():
+    """Crea el admin por defecto si no existe."""
+    db = SessionLocal()
+    try:
+        email = "admin@datac.chat"
+        u = db.get(User, email)
+        if not u:
+            u = User(email=email, password_hash=pwd_ctx.hash("admin123"), role="admin")
+            db.add(u)
+            db.commit()
+            print("[auth] Admin inicial creado:", email)
+    finally:
+        db.close()
+
+seed_admin()
+
+# ========= Modelos de auth y endpoints =========
 class LoginRequest(BaseModel):
     email: str
     password: str
@@ -99,51 +125,32 @@ class RegisterRequest(BaseModel):
     password: str
     role: Literal["user", "admin"] = "user"
 
+
 @app.post("/auth/login")
-def auth_login(req: LoginRequest):
-    u = _users.get(req.email.lower().strip())
-    if not u or not pwd_ctx.verify(req.password, u["password_hash"]):
+def auth_login(req: LoginRequest, db: Session = Depends(get_db)):
+    email = req.email.lower().strip()
+    u = db.get(User, email)
+    if not u or not u.is_active or not pwd_ctx.verify(req.password, u.password_hash):
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
-    token = create_jwt(sub=req.email, role=u["role"])
-    return {"access_token": token, "token_type": "bearer", "role": u["role"]}
+    token = create_jwt(sub=u.email, role=u.role)
+    return {"access_token": token, "token_type": "bearer", "role": u.role}
 
 @app.post("/auth/register")
-def auth_register(req: RegisterRequest, _: dict = Depends(require_roles(["admin"]))):
+def auth_register(req: RegisterRequest, _: dict = Depends(require_roles(["admin"])), db: Session = Depends(get_db)):
     email = req.email.lower().strip()
-    if email in _users:
+    if db.get(User, email):
         raise HTTPException(status_code=400, detail="El usuario ya existe")
-    _users[email] = {"password_hash": pwd_ctx.hash(req.password), "role": req.role}
-    return {"ok": True, "email": email, "role": req.role}
+    u = User(email=email, password_hash=pwd_ctx.hash(req.password), role=req.role)
+    db.add(u); db.commit()
+    return {"ok": True, "email": email, "role": u.role}
 
 @app.get("/auth/me")
 def auth_me(user=Depends(get_current_user)):
     return user
 
-@app.get("/admin/ping")
-def admin_ping(_: dict = Depends(require_roles(["admin"]))):
-    return {"ok": True, "msg": "pong (admin)"}
-
-
-# =========================
-# Auth (MVP)
-# =========================
-JWT_SECRET = os.getenv("JWT_SECRET", "dev")
-auth_scheme = HTTPBearer()
-
 
 print("[boot] app_min desde:", __file__)
 print("[exec_pandas] v2 cargada (sin locals())")
-
-
-def require_jwt(token: HTTPAuthorizationCredentials = Depends(auth_scheme)):
-    try:
-        payload = jwt.decode(
-            token.credentials, JWT_SECRET, algorithms=["HS256"]
-        )  # nosec - MVP
-        return payload
-    except PyJWTError as e:
-        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
-
 
 import json, re, unicodedata
 
@@ -1026,18 +1033,14 @@ def answer_excel(question: str, source: ExcelSource, opts: ChatOptions) -> ChatR
 # =========================
 # FastAPI
 # =========================
-app = FastAPI(title="DataChatbot MVP", version="0.1.0")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest, _: dict = Depends(require_jwt)):
+def chat(req: ChatRequest, payload: dict = Depends(require_jwt)):
+    # ❌ los admins no pueden usar el chatbot
+    if str(payload.get("role", "")).lower() == "admin":
+        raise HTTPException(status_code=403, detail="Admins no pueden usar el chatbot")
+
     if req.datasource.type == "mysql":
         return answer_mysql(req.question, req.datasource, req.options)
     elif req.datasource.type == "excel":

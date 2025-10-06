@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { askData } from '../services/api';
+import { askData, getAuth } from '../services/api';
 import type { ChatResponse } from '../services/api';
 import './MainPage.css';
 import DataTable from '../components/DataTable';
 import { useAuth } from '../auth/AuthContext';
-import { Link } from 'react-router-dom';
-
+import { Navigate } from 'react-router-dom';
 type Msg = {
   role: 'user' | 'assistant';
   text: string;
@@ -16,6 +15,10 @@ type Msg = {
 type SourceType = 'mysql' | 'excel';
 
 export default function MainPage() {
+  const { token, role } = getAuth();
+  if (!token) return <Navigate to="/login" replace />;
+  if (role === 'admin') return <Navigate to="/admin" replace />;
+
   const { auth } = useAuth();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
@@ -54,7 +57,7 @@ export default function MainPage() {
           : ({ type: 'excel', path: excelPath, sheet_name: sheetName } as const);
 
       const resp = await askData({
-        token: auth.token || token,
+        token: getAuth().token || token,
         question: q,
         datasource,
         options: { language: lang, max_rows: 200 },
