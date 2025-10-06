@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { askData, getAuth } from '../services/api';
+import { askData } from '../services/api';
 import type { ChatResponse } from '../services/api';
 import './MainPage.css';
 import DataTable from '../components/DataTable';
 import { useAuth } from '../auth/AuthContext';
-import { Navigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+
 type Msg = {
   role: 'user' | 'assistant';
   text: string;
@@ -12,14 +13,12 @@ type Msg = {
   table?: ChatResponse['table'] | null;
 };
 
-type SourceType = 'mysql' | 'excel';
+// 👇 ahora soportamos 'saved'
+type SourceType = 'mysql' | 'excel' | 'saved';
 
 export default function MainPage() {
-  const { token, role } = getAuth();
-  if (!token) return <Navigate to="/login" replace />;
-  if (role === 'admin') return <Navigate to="/admin" replace />;
-
   const { auth } = useAuth();
+
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -40,6 +39,9 @@ export default function MainPage() {
   const [excelPath, setExcelPath] = useState('C:/data/empleados.xlsx'); // ruta visible por el servidor (MVP)
   const [sheetName, setSheetName] = useState<string | number | undefined>(0);
 
+  // Saved (admin)
+  const [connectionId, setConnectionId] = useState<number | ''>('');
+
   const pushMessage = (m: Msg) => setMessages(prev => [...prev, m]);
 
   const handleSend = async (e: React.FormEvent) => {
@@ -47,6 +49,21 @@ export default function MainPage() {
     setError('');
     const q = input.trim();
     if (!q) return;
+
+    // Validaciones mínimas por tipo
+    if (source === 'mysql' && !sqlUrl) {
+      setError('Debes indicar la SQLAlchemy URL para MySQL.');
+      return;
+    }
+    if (source === 'excel' && !excelPath) {
+      setError('Debes indicar la ruta del Excel en el servidor.');
+      return;
+    }
+    if (source === 'saved' && (connectionId === '' || isNaN(Number(connectionId)))) {
+      setError('Debes indicar un Connection ID válido (número).');
+      return;
+    }
+
     setInput('');
     pushMessage({ role: 'user', text: q });
     setLoading(true);
@@ -54,10 +71,12 @@ export default function MainPage() {
       const datasource =
         source === 'mysql'
           ? ({ type: 'mysql', sqlalchemy_url: sqlUrl } as const)
-          : ({ type: 'excel', path: excelPath, sheet_name: sheetName } as const);
+          : source === 'excel'
+          ? ({ type: 'excel', path: excelPath, sheet_name: sheetName } as const)
+          : ({ type: 'saved', connection_id: Number(connectionId) } as const);
 
       const resp = await askData({
-        token: getAuth().token || token,
+        token: auth.token, // ✅ usa el token de la sesión
         question: q,
         datasource,
         options: { language: lang, max_rows: 200 },
@@ -102,7 +121,6 @@ export default function MainPage() {
       </section>
 
       {/* PANEL DE CONEXIÓN */}
-      {/* PANEL DE CONEXIÓN (colapsable) */}
       <section className="container mt-16">
         <div className="chat-card" style={{ borderTop: '1px solid #e7e3ef', borderRadius: 16 }}>
           <div className="conn-header">
@@ -125,10 +143,7 @@ export default function MainPage() {
             aria-hidden={!showConn}
           >
             {/* Selección de origen */}
-            <div
-              className="connection-controls"
-              style={{ display: 'flex', gap: 12, margin: '10px 0' }}
-            >
+            <div className="connection-controls" style={{ display: 'flex', gap: 12, margin: '10px 0' }}>
               <label>
                 <input
                   type="radio"
@@ -149,98 +164,97 @@ export default function MainPage() {
                 />
                 Excel
               </label>
+              <label>
+                <input
+                  type="radio"
+                  name="source"
+                  value="saved"
+                  checked={source === 'saved'}
+                  onChange={() => setSource('saved')}
+                />
+                Saved (admin)
+              </label>
             </div>
 
             {/* Campos comunes */}
-              <div style={{display: 'grid', gap: 10}}>
-                  <div className="text-sm" style={{color: '#6b7280'}}>
-                      {auth?.token ? `Sesión iniciada (${auth.role?.toUpperCase() || 'USER'})` : 'No has iniciado sesión'}
-                  </div>
-
-
-                  <label className="text-sm">
-                      Language
-                      <select
-                          value={lang}
-                          onChange={e => setLang(e.target.value as 'es' | 'en')}
-                          style={{
-                              width: '100%',
-                              padding: 10,
-                              borderRadius: 10,
-                              border: '1px solid #d9d9e3',
-                              marginTop: 6,
-                          }}
-                      >
-                          <option value="es">Español</option>
-                          <option value="en">English</option>
-                      </select>
-                  </label>
-
-                  {source === 'mysql' ? (
-                      <label className="text-sm">
-                          SQLAlchemy URL
-                          <input
-                              value={sqlUrl}
-                              onChange={e => setSqlUrl(e.target.value)}
-                              placeholder="mysql+pymysql://user:pass@host:3306/db"
-                              style={{
-                                  width: '100%',
-                                  padding: 10,
-                                  borderRadius: 10,
-                                  border: '1px solid #d9d9e3',
-                                  marginTop: 6,
-                              }}
-                          />
-                      </label>
-                  ) : (
-                      <>
-                          <label className="text-sm">
-                              Excel path (server-visible)
-                              <input
-                                  value={excelPath}
-                                  onChange={e => setExcelPath(e.target.value)}
-                                  placeholder="C:/data/empleados.xlsx"
-                                  style={{
-                                      width: '100%',
-                                      padding: 10,
-                                      borderRadius: 10,
-                                      border: '1px solid #d9d9e3',
-                                      marginTop: 6,
-                                  }}
-                              />
-                          </label>
-                          <label className="text-sm">
-                              Sheet name / index (opcional)
-                              <input
-                                  value={String(sheetName ?? '')}
-                                  onChange={e => {
-                                      const s = e.target.value;
-                                      setSheetName(s === '' ? undefined : isNaN(Number(s)) ? s : Number(s));
-                                  }}
-                                  placeholder="0"
-                                  style={{
-                                      width: '100%',
-                                      padding: 10,
-                                      borderRadius: 10,
-                                      border: '1px solid #d9d9e3',
-                                      marginTop: 6,
-                                  }}
-                              />
-                          </label>
-                          <div className="text-sm" style={{color: '#6b7280'}}>
-                              * En este MVP el backend lee el archivo desde una ruta local del servidor.
-                          </div>
-                      </>
-                  )}
+            <div style={{ display: 'grid', gap: 10 }}>
+              <div className="text-sm" style={{ color: '#6b7280' }}>
+                {auth?.token ? `Sesión iniciada (${auth.role?.toUpperCase() || 'USER'})` : 'No has iniciado sesión'}
               </div>
+
+              <label className="text-sm">
+                Language
+                <select
+                  value={lang}
+                  onChange={e => setLang(e.target.value as 'es' | 'en')}
+                  style={{ width: '100%', padding: 10, borderRadius: 10, border: '1px solid #d9d9e3', marginTop: 6 }}
+                >
+                  <option value="es">Español</option>
+                  <option value="en">English</option>
+                </select>
+              </label>
+
+              {source === 'mysql' && (
+                <label className="text-sm">
+                  SQLAlchemy URL
+                  <input
+                    value={sqlUrl}
+                    onChange={e => setSqlUrl(e.target.value)}
+                    placeholder="mysql+pymysql://user:pass@host:3306/db"
+                    style={{ width: '100%', padding: 10, borderRadius: 10, border: '1px solid #d9d9e3', marginTop: 6 }}
+                  />
+                </label>
+              )}
+
+              {source === 'excel' && (
+                <>
+                  <label className="text-sm">
+                    Excel path (server-visible)
+                    <input
+                      value={excelPath}
+                      onChange={e => setExcelPath(e.target.value)}
+                      placeholder="C:/data/empleados.xlsx"
+                      style={{ width: '100%', padding: 10, borderRadius: 10, border: '1px solid #d9d9e3', marginTop: 6 }}
+                    />
+                  </label>
+                  <label className="text-sm">
+                    Sheet name / index (opcional)
+                    <input
+                      value={String(sheetName ?? '')}
+                      onChange={e => {
+                        const s = e.target.value;
+                        setSheetName(s === '' ? undefined : isNaN(Number(s)) ? s : Number(s));
+                      }}
+                      placeholder="0"
+                      style={{ width: '100%', padding: 10, borderRadius: 10, border: '1px solid #d9d9e3', marginTop: 6 }}
+                    />
+                  </label>
+                  <div className="text-sm" style={{ color: '#6b7280' }}>
+                    * En este MVP el backend lee el archivo desde una ruta local del servidor.
+                  </div>
+                </>
+              )}
+
+              {source === 'saved' && (
+                <label className="text-sm">
+                  Connection ID
+                  <input
+                    value={String(connectionId)}
+                    onChange={e => setConnectionId(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="1"
+                    style={{ width: '100%', padding: 10, borderRadius: 10, border: '1px solid #d9d9e3', marginTop: 6 }}
+                  />
+                </label>
+              )}
+            </div>
           </div>
         </div>
       </section>
 
-        {/* CHAT */}
-        <section className="container mt-16">
-            <div className="chat-card">
-                <div className="chat-header">
+      {/* CHAT */}
+      <section className="container mt-16">
+        <div className="chat-card">
+          <div className="chat-header">
             <h3>DataChat Assistant</h3>
             <div className="chat-actions">
               <button type="button" title="New Chat" onClick={() => setMessages([])}>
@@ -318,8 +332,8 @@ export default function MainPage() {
                                     padding: '8px',
                                     textAlign: 'left',
                                     fontWeight: 600,
-                                    background: '#f1f5f9', // gris claro de fondo
-                                    color: '#111827', // texto oscuro
+                                    background: '#f1f5f9',
+                                    color: '#111827',
                                   }}
                                 >
                                   {c}

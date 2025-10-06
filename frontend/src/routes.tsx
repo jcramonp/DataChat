@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import AdminHome from './pages/AdminHome';
 import AdminUsers from './pages/AdminUsers';
 import { getAuth } from './services/api';
+import AdminConnections from './pages/AdminConnections';
 
 function RequireUser({ children }: { children: React.ReactNode }) {
   const { token, role } = getAuth();
@@ -34,6 +35,7 @@ export const router = createBrowserRouter([
       { path: 'main', element: <RequireUser><MainPage /></RequireUser> },
       { path: 'admin', element: <RequireAdmin><AdminHome /></RequireAdmin> },
       { path: 'admin/users', element: <RequireAdmin><AdminUsers /></RequireAdmin> },
+      { path: 'admin/connections', element: <RequireAdmin><AdminConnections /></RequireAdmin> },
     ],
   },
 ]);

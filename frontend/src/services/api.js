@@ -60,3 +60,35 @@ export async function askData(p) {
   if (!res.ok) throw new Error(`Error ${res.status}`);
   return res.json();
 }
+
+/** @param {{name:string, db_type:"mysql"|"postgres"|"sqlite", sqlalchemy_url:string}} p */
+export async function createConnection(p) {
+  const { token } = getAuth();
+  const res = await fetch(`${API_URL}/admin/connections`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(p),
+  });
+  if (res.status === 401) throw new Error("No autorizado");
+  if (res.status === 403) throw new Error("Solo admin");
+  const j = await res.json();
+  if (!res.ok) throw new Error(j?.detail || `Error ${res.status}`);
+  return j; // { id, name, db_type, sqlalchemy_url, is_active }
+}
+
+export async function listConnections() {
+  const { token } = getAuth();
+  const res = await fetch(`${API_URL}/admin/connections`, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (res.status === 401) throw new Error("No autorizado");
+  if (res.status === 403) throw new Error("Solo admin");
+  const j = await res.json();
+  if (!res.ok) throw new Error(j?.detail || `Error ${res.status}`);
+  return j; // Array<ConnectionOut>
+}

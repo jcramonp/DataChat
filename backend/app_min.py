@@ -15,9 +15,13 @@ from langchain_core.prompts import ChatPromptTemplate
 import jwt
 from jwt import PyJWTError
 
-from sqlalchemy import Column, String, Boolean, create_engine, text, inspect
+from sqlalchemy import Column, String, Boolean, create_engine, text, inspect, Integer, DateTime
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.sql import func
+from sqlalchemy.engine import Engine
+
+from cryptography.fernet import Fernet, InvalidToken
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -90,6 +94,17 @@ class User(Base):
     role = Column(String, default="user")  # "user" | "admin"
     is_active = Column(Boolean, default=True)
 
+class Connection(Base):
+    __tablename__ = "connections"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, unique=True, nullable=False, index=True)
+    db_type = Column(String, nullable=False)  # "mysql" | "postgres" | "sqlite"
+    sqlalchemy_url = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_by = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 Base.metadata.create_all(bind=engine)
 
 def get_db():
@@ -125,6 +140,20 @@ class RegisterRequest(BaseModel):
     password: str
     role: Literal["user", "admin"] = "user"
 
+class CreateConnectionRequest(BaseModel):
+    name: str
+    db_type: Literal["mysql", "postgres", "sqlite"]
+    sqlalchemy_url: str
+
+class ConnectionOut(BaseModel):
+    id: int
+    name: str
+    db_type: str
+    sqlalchemy_url: str
+    is_active: bool
+
+    class Config:
+        from_attributes = True
 
 @app.post("/auth/login")
 def auth_login(req: LoginRequest, db: Session = Depends(get_db)):
@@ -148,6 +177,55 @@ def auth_register(req: RegisterRequest, _: dict = Depends(require_roles(["admin"
 def auth_me(user=Depends(get_current_user)):
     return user
 
+@app.get("/admin/ping")
+def admin_ping(_: dict = Depends(require_roles(["admin"]))):
+    return {"ok": True, "msg": "pong (admin)"}
+
+# =========================
+# Endpoints de Conexiones (admin)
+# =========================
+
+def _validate_connection(sqlalchemy_url: str) -> None:
+    """Levanta si no conecta / no se puede ejecutar SELECT 1."""
+    eng = _make_engine(sqlalchemy_url)
+    try:
+        with eng.connect() as c:
+            c.execute(text("SELECT 1"))
+    finally:
+        eng.dispose()
+
+
+@app.post("/admin/connections", response_model=ConnectionOut)
+def admin_create_connection(
+    req: CreateConnectionRequest,
+    admin=Depends(require_roles(["admin"])),
+    db: Session = Depends(get_db),
+):
+    if _dialect_from_url(req.sqlalchemy_url) != req.db_type:
+        raise HTTPException(status_code=400, detail="db_type no coincide con la URL")
+
+    try:
+        _validate_connection(req.sqlalchemy_url)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"No se pudo conectar: {e}")
+
+    if db.query(Connection).filter_by(name=req.name).first():
+        raise HTTPException(status_code=400, detail="Ya existe una conexión con ese nombre")
+
+    conn = Connection(
+        name=req.name,
+        db_type=req.db_type,
+        sqlalchemy_url=req.sqlalchemy_url,
+        is_active=True,
+        created_by=admin["email"],
+    )
+    db.add(conn); db.commit(); db.refresh(conn)
+    return conn
+
+
+@app.get("/admin/connections", response_model=list[ConnectionOut])
+def admin_list_connections(_: dict = Depends(require_roles(["admin"])), db: Session = Depends(get_db)):
+    return db.query(Connection).order_by(Connection.id.desc()).all()
 
 print("[boot] app_min desde:", __file__)
 print("[exec_pandas] v2 cargada (sin locals())")
@@ -591,14 +669,27 @@ class MySQLSource(BaseModel):
     type: Literal["mysql"] = "mysql"
     sqlalchemy_url: str  # ej: mysql+pymysql://user:pass@host:3306/db
 
+class PostgresSource(BaseModel):
+    type: Literal["postgres"] = "postgres"
+    sqlalchemy_url: str  # ej: postgresql+psycopg2://user:pass@host:5432/db
+
+class SQLiteSource(BaseModel):
+    type: Literal["sqlite"] = "sqlite"
+    sqlalchemy_url: str  # ej: sqlite:///C:/path/to/db.sqlite3
+
+class SavedSource(BaseModel):
+    type: Literal["saved"] = "saved"
+    connection_id: int
 
 class ExcelSource(BaseModel):
     type: Literal["excel"] = "excel"
     path: str
     sheet_name: int | str | None = 0
 
-
-DataSource = Annotated[Union[MySQLSource, ExcelSource], Field(discriminator="type")]
+DataSource = Annotated[
+    Union[MySQLSource, PostgresSource, SQLiteSource, ExcelSource, SavedSource],
+    Field(discriminator="type")
+]
 
 
 class ChatOptions(BaseModel):
@@ -629,12 +720,7 @@ class ChatResponse(BaseModel):
 # =========================
 
 
-def extract_mysql_schema(
-    sqlalchemy_url: str, max_cols: int = 80, max_tables: int = 50
-) -> Dict[str, List[str]]:
-    engine = create_engine(
-        sqlalchemy_url, connect_args={"charset": "utf8mb4"}, pool_pre_ping=True
-    )
+def extract_sql_schema_from_engine(engine: Engine, max_cols: int = 80, max_tables: int = 50) -> Dict[str, List[str]]:
     insp = inspect(engine)
     schema: Dict[str, List[str]] = {}
     for t in insp.get_table_names()[:max_tables]:
@@ -643,7 +729,6 @@ def extract_mysql_schema(
             schema[t] = cols
         except Exception:
             continue
-    engine.dispose()
     return schema
 
 
@@ -659,6 +744,26 @@ def extract_excel_schema(
         "dtypes": {c: str(df[c].dtype) for c in df.columns},
     }
 
+def _make_engine(sqlalchemy_url: str) -> Engine:
+    url_l = sqlalchemy_url.lower()
+    if url_l.startswith("mysql"):
+        return create_engine(sqlalchemy_url, connect_args={"charset": "utf8mb4"}, pool_pre_ping=True)
+    if url_l.startswith("sqlite"):
+        # Para SQLite en archivo local
+        return create_engine(sqlalchemy_url, connect_args={"check_same_thread": False})
+    # postgres, etc.
+    return create_engine(sqlalchemy_url, pool_pre_ping=True)
+
+def _dialect_from_url(sqlalchemy_url: str) -> str:
+    url_l = sqlalchemy_url.lower()
+    if url_l.startswith("mysql"):
+        return "mysql"
+    if url_l.startswith("postgres"):
+        return "postgres"
+    if url_l.startswith("sqlite"):
+        return "sqlite"
+    # por defecto intenta ANSI SQL
+    return "ansi"
 
 # =========================
 # Prompting (few-shots mínimos; ajústalos a tu esquema real)
@@ -736,6 +841,7 @@ SQL_SYSTEM = (
     "- 'sede' ≈ 'site'. Si el usuario dice 'sede 2', mapéalo a empleados.sede_id = 2.\n"
     "- Si pide 'cuántos empleados hay en la sede X', devuelve un COUNT(*) filtrando por empleados.sede_id=X.\n"
     "- Si menciona el nombre de sede (tabla sedes.nombre), úsalo para buscar el id y unir si hace falta."
+    "Notas: MySQL/PostgreSQL/SQLite aceptan LIMIT; evita funciones específicas si no son necesarias."
 )
 
 PANDAS_SYSTEM = (
@@ -797,7 +903,7 @@ for ex in SQL_FEWSHOTS:
 SQL_PROMPT = ChatPromptTemplate.from_messages(
     [
         ("system", SQL_SYSTEM),
-        ("human", "Esquema (tabla: [columnas]):\n{schema}\n\nPregunta: {question}"),
+        ("human", "Dialecto: {dialect}\n Esquema (tabla: [columnas]):\n{schema}\n\nPregunta: {question}"),
     ]
     + _sql_fewshot_msgs
 )
@@ -913,26 +1019,34 @@ def exec_pandas(code: str, df: pd.DataFrame) -> pd.DataFrame:
 # =========================
 
 
-def answer_mysql(question: str, source: MySQLSource, opts: ChatOptions) -> ChatResponse:
-    schema = extract_mysql_schema(source.sqlalchemy_url)
+def answer_sql(question: str, sqlalchemy_url: str, opts: ChatOptions) -> ChatResponse:
+    dialect = _dialect_from_url(sqlalchemy_url)
+    engine = _make_engine(sqlalchemy_url)
+
+    # 1) esquema
+    try:
+        schema = extract_sql_schema_from_engine(engine)
+    finally:
+        # no cierres aún; lo usamos para ejecutar
+        pass
+
+    # 2) prompt (incluye dialect)
     prompt = SQL_PROMPT.format_messages(
-        schema=json.dumps(schema, ensure_ascii=False), question=question
+        schema=json.dumps(schema, ensure_ascii=False),
+        question=question,
+        dialect=dialect,
     )
     sql_code = (llm | parser).invoke(prompt)
     sql_code = sanitize_sql(sql_code, limit=opts.max_rows)
 
-    engine = create_engine(
-        source.sqlalchemy_url, connect_args={"charset": "utf8mb4"}, pool_pre_ping=True
-    )
+    # 3) ejecutar
     try:
         with engine.connect() as conn:
             res = conn.execute(text(sql_code))
             rows = res.fetchall()
             cols = list(res.keys())
     except SQLAlchemyError as e:
-        raise HTTPException(
-            status_code=400, detail=f"Error SQL: {str(e)} | Query: {sql_code}"
-        )
+        raise HTTPException(status_code=400, detail=f"Error SQL: {str(e)} | Query: {sql_code}")
     finally:
         engine.dispose()
 
@@ -940,19 +1054,17 @@ def answer_mysql(question: str, source: MySQLSource, opts: ChatOptions) -> ChatR
     table = TableData(
         columns=cols, rows=df.astype(object).where(pd.notnull(df), None).values.tolist()
     )
-
     answer_text = (
-        f"Mostrando {len(table.rows)} fila(s)."
-        if opts.language == "es"
+        f"Mostrando {len(table.rows)} fila(s)." if opts.language == "es"
         else f"Showing {len(table.rows)} row(s)."
     )
-
     return ChatResponse(
         answer_text=answer_text,
         generated={"type": "sql", "code": sql_code},
         table=table,
         notices=[],
     )
+
 
 
 def answer_excel(question: str, source: ExcelSource, opts: ChatOptions) -> ChatResponse:
@@ -1036,17 +1148,29 @@ def answer_excel(question: str, source: ExcelSource, opts: ChatOptions) -> ChatR
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest, payload: dict = Depends(require_jwt)):
-    # ❌ los admins no pueden usar el chatbot
+def chat(req: ChatRequest, payload: dict = Depends(require_jwt), db: Session = Depends(get_db)):
+    # ❌ los admins no usan el chatbot
     if str(payload.get("role", "")).lower() == "admin":
         raise HTTPException(status_code=403, detail="Admins no pueden usar el chatbot")
 
-    if req.datasource.type == "mysql":
-        return answer_mysql(req.question, req.datasource, req.options)
-    elif req.datasource.type == "excel":
-        return answer_excel(req.question, req.datasource, req.options)
-    else:
-        raise HTTPException(status_code=400, detail="Datasource no soportado")
+    ds = req.datasource
+
+    if ds.type == "excel":
+        return answer_excel(req.question, ds, req.options)
+
+    # conexiones SQL directas
+    if ds.type in ("mysql", "postgres", "sqlite"):
+        return answer_sql(req.question, ds.sqlalchemy_url, req.options)
+
+    # conexión guardada por id (admin la creó antes)
+    if ds.type == "saved":
+        conn = db.query(Connection).filter_by(id=ds.connection_id, is_active=True).first()
+        if not conn:
+            raise HTTPException(status_code=404, detail="Conexión no encontrada o inactiva")
+        return answer_sql(req.question, conn.sqlalchemy_url, req.options)
+
+    raise HTTPException(status_code=400, detail="Datasource no soportado")
+
 
 
 # =========================
