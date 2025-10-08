@@ -1,52 +1,237 @@
 from __future__ import annotations
-import os
-import json
-import re
+import os, json, re
 from typing import Any, Dict, List, Optional, Tuple, Literal, Union, Annotated
+from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
-
-from starlette.middleware.cors import CORSMiddleware
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
 
 import jwt
 from jwt import PyJWTError
 
-from sqlalchemy import create_engine, text, inspect
+from sqlalchemy import Column, String, Boolean, create_engine, text, inspect, Integer, DateTime
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.sql import func
+from sqlalchemy.engine import Engine
+
+from cryptography.fernet import Fernet, InvalidToken
 
 import pandas as pd
-
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-
 from dotenv import load_dotenv
+from passlib.context import CryptContext
 
+from fastapi import Query
+import openpyxl
+
+# ========= Env & App =========
 load_dotenv()
+app = FastAPI(title="DataChatbot MVP", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ========= Seguridad / JWT =========
+JWT_SECRET = os.getenv("JWT_SECRET", "dev")     # cámbialo en prod
+JWT_ALG = "HS256"
+JWT_EXPIRE_MINUTES = 120
+
+# Usa Argon2 (evita líos de bcrypt en Windows)
+pwd_ctx = CryptContext(schemes=["argon2"], deprecated="auto")
+
+auth_scheme = HTTPBearer(auto_error=True)
+
+# ========= Persistencia de usuarios (SQLite) =========
+DB_URL = os.getenv("AUTH_DB_URL", "sqlite:///./auth.db")
+
+def require_jwt(credentials: HTTPAuthorizationCredentials = Depends(auth_scheme)) -> dict:
+    token = credentials.credentials
+    try:
+        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expirado")
+    except (jwt.InvalidTokenError, PyJWTError) as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Token inválido: {e}")
+
+def create_jwt(sub: str, role: str, extra: dict | None = None) -> str:
+    payload = {
+        "sub": sub,
+        "role": role,
+        "iat": int(datetime.now(tz=timezone.utc).timestamp()),
+        "exp": int((datetime.now(tz=timezone.utc) + timedelta(minutes=JWT_EXPIRE_MINUTES)).timestamp()),
+    }
+    if extra:
+        payload.update(extra)
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
+
+def get_current_user(payload: dict = Depends(require_jwt)) -> dict:
+    return {"email": payload.get("sub"), "role": payload.get("role")}
+
+def require_roles(roles: list[str]):
+    def _dep(user: dict = Depends(get_current_user)):
+        if user.get("role") not in roles:
+            raise HTTPException(status_code=403, detail="Forbidden: insufficient role")
+        return user
+    return _dep
+
+# ========= Persistencia de usuarios (SQLite) =========
+DB_URL = os.getenv("AUTH_DB_URL", "sqlite:///./auth.db")
+engine = create_engine(DB_URL, connect_args={"check_same_thread": False} if DB_URL.startswith("sqlite") else {})
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+Base = declarative_base()
+
+class User(Base):
+    __tablename__ = "users"
+    email = Column(String, primary_key=True, index=True)
+    password_hash = Column(String, nullable=False)
+    role = Column(String, default="user")  # "user" | "admin"
+    is_active = Column(Boolean, default=True)
+
+class Connection(Base):
+    __tablename__ = "connections"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, unique=True, nullable=False, index=True)
+    db_type = Column(String, nullable=False)  # "mysql" | "postgres" | "sqlite"
+    sqlalchemy_url = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_by = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+Base.metadata.create_all(bind=engine)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+def seed_admin():
+    """Crea el admin por defecto si no existe."""
+    db = SessionLocal()
+    try:
+        email = "admin@datac.chat"
+        u = db.get(User, email)
+        if not u:
+            u = User(email=email, password_hash=pwd_ctx.hash("admin123"), role="admin")
+            db.add(u)
+            db.commit()
+            print("[auth] Admin inicial creado:", email)
+    finally:
+        db.close()
+
+seed_admin()
+
+# ========= Modelos de auth y endpoints =========
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    role: Literal["user", "admin"] = "user"
+
+class CreateConnectionRequest(BaseModel):
+    name: str
+    db_type: Literal["mysql", "postgres", "sqlite"]
+    sqlalchemy_url: str
+
+class ConnectionOut(BaseModel):
+    id: int
+    name: str
+    db_type: str
+    sqlalchemy_url: str
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+@app.post("/auth/login")
+def auth_login(req: LoginRequest, db: Session = Depends(get_db)):
+    email = req.email.lower().strip()
+    u = db.get(User, email)
+    if not u or not u.is_active or not pwd_ctx.verify(req.password, u.password_hash):
+        raise HTTPException(status_code=401, detail="Credenciales inválidas")
+    token = create_jwt(sub=u.email, role=u.role)
+    return {"access_token": token, "token_type": "bearer", "role": u.role}
+
+@app.post("/auth/register")
+def auth_register(req: RegisterRequest, _: dict = Depends(require_roles(["admin"])), db: Session = Depends(get_db)):
+    email = req.email.lower().strip()
+    if db.get(User, email):
+        raise HTTPException(status_code=400, detail="El usuario ya existe")
+    u = User(email=email, password_hash=pwd_ctx.hash(req.password), role=req.role)
+    db.add(u); db.commit()
+    return {"ok": True, "email": email, "role": u.role}
+
+@app.get("/auth/me")
+def auth_me(user=Depends(get_current_user)):
+    return user
+
+@app.get("/admin/ping")
+def admin_ping(_: dict = Depends(require_roles(["admin"]))):
+    return {"ok": True, "msg": "pong (admin)"}
 
 # =========================
-# Auth (MVP)
+# Endpoints de Conexiones (admin)
 # =========================
-JWT_SECRET = os.getenv("JWT_SECRET", "dev")
-auth_scheme = HTTPBearer()
 
+def _validate_connection(sqlalchemy_url: str) -> None:
+    """Levanta si no conecta / no se puede ejecutar SELECT 1."""
+    eng = _make_engine(sqlalchemy_url)
+    try:
+        with eng.connect() as c:
+            c.execute(text("SELECT 1"))
+    finally:
+        eng.dispose()
+
+
+@app.post("/admin/connections", response_model=ConnectionOut)
+def admin_create_connection(
+    req: CreateConnectionRequest,
+    admin=Depends(require_roles(["admin"])),
+    db: Session = Depends(get_db),
+):
+    if _dialect_from_url(req.sqlalchemy_url) != req.db_type:
+        raise HTTPException(status_code=400, detail="db_type no coincide con la URL")
+
+    try:
+        _validate_connection(req.sqlalchemy_url)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"No se pudo conectar: {e}")
+
+    if db.query(Connection).filter_by(name=req.name).first():
+        raise HTTPException(status_code=400, detail="Ya existe una conexión con ese nombre")
+
+    conn = Connection(
+        name=req.name,
+        db_type=req.db_type,
+        sqlalchemy_url=req.sqlalchemy_url,
+        is_active=True,
+        created_by=admin["email"],
+    )
+    db.add(conn); db.commit(); db.refresh(conn)
+    return conn
+
+
+@app.get("/admin/connections", response_model=list[ConnectionOut])
+def admin_list_connections(_: dict = Depends(require_roles(["admin"])), db: Session = Depends(get_db)):
+    return db.query(Connection).order_by(Connection.id.desc()).all()
 
 print("[boot] app_min desde:", __file__)
 print("[exec_pandas] v2 cargada (sin locals())")
-
-
-def require_jwt(token: HTTPAuthorizationCredentials = Depends(auth_scheme)):
-    try:
-        payload = jwt.decode(
-            token.credentials, JWT_SECRET, algorithms=["HS256"]
-        )  # nosec - MVP
-        return payload
-    except PyJWTError as e:
-        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
-
 
 import json, re, unicodedata
 
@@ -487,14 +672,27 @@ class MySQLSource(BaseModel):
     type: Literal["mysql"] = "mysql"
     sqlalchemy_url: str  # ej: mysql+pymysql://user:pass@host:3306/db
 
+class PostgresSource(BaseModel):
+    type: Literal["postgres"] = "postgres"
+    sqlalchemy_url: str  # ej: postgresql+psycopg2://user:pass@host:5432/db
+
+class SQLiteSource(BaseModel):
+    type: Literal["sqlite"] = "sqlite"
+    sqlalchemy_url: str  # ej: sqlite:///C:/path/to/db.sqlite3
+
+class SavedSource(BaseModel):
+    type: Literal["saved"] = "saved"
+    connection_id: int
 
 class ExcelSource(BaseModel):
     type: Literal["excel"] = "excel"
     path: str
     sheet_name: int | str | None = 0
 
-
-DataSource = Annotated[Union[MySQLSource, ExcelSource], Field(discriminator="type")]
+DataSource = Annotated[
+    Union[MySQLSource, PostgresSource, SQLiteSource, ExcelSource, SavedSource],
+    Field(discriminator="type")
+]
 
 
 class ChatOptions(BaseModel):
@@ -525,12 +723,7 @@ class ChatResponse(BaseModel):
 # =========================
 
 
-def extract_mysql_schema(
-    sqlalchemy_url: str, max_cols: int = 80, max_tables: int = 50
-) -> Dict[str, List[str]]:
-    engine = create_engine(
-        sqlalchemy_url, connect_args={"charset": "utf8mb4"}, pool_pre_ping=True
-    )
+def extract_sql_schema_from_engine(engine: Engine, max_cols: int = 80, max_tables: int = 50) -> Dict[str, List[str]]:
     insp = inspect(engine)
     schema: Dict[str, List[str]] = {}
     for t in insp.get_table_names()[:max_tables]:
@@ -539,7 +732,6 @@ def extract_mysql_schema(
             schema[t] = cols
         except Exception:
             continue
-    engine.dispose()
     return schema
 
 
@@ -555,6 +747,26 @@ def extract_excel_schema(
         "dtypes": {c: str(df[c].dtype) for c in df.columns},
     }
 
+def _make_engine(sqlalchemy_url: str) -> Engine:
+    url_l = sqlalchemy_url.lower()
+    if url_l.startswith("mysql"):
+        return create_engine(sqlalchemy_url, connect_args={"charset": "utf8mb4"}, pool_pre_ping=True)
+    if url_l.startswith("sqlite"):
+        # Para SQLite en archivo local
+        return create_engine(sqlalchemy_url, connect_args={"check_same_thread": False})
+    # postgres, etc.
+    return create_engine(sqlalchemy_url, pool_pre_ping=True)
+
+def _dialect_from_url(sqlalchemy_url: str) -> str:
+    url_l = sqlalchemy_url.lower()
+    if url_l.startswith("mysql"):
+        return "mysql"
+    if url_l.startswith("postgres"):
+        return "postgres"
+    if url_l.startswith("sqlite"):
+        return "sqlite"
+    # por defecto intenta ANSI SQL
+    return "ansi"
 
 # =========================
 # Prompting (few-shots mínimos; ajústalos a tu esquema real)
@@ -632,6 +844,7 @@ SQL_SYSTEM = (
     "- 'sede' ≈ 'site'. Si el usuario dice 'sede 2', mapéalo a empleados.sede_id = 2.\n"
     "- Si pide 'cuántos empleados hay en la sede X', devuelve un COUNT(*) filtrando por empleados.sede_id=X.\n"
     "- Si menciona el nombre de sede (tabla sedes.nombre), úsalo para buscar el id y unir si hace falta."
+    "Notas: MySQL/PostgreSQL/SQLite aceptan LIMIT; evita funciones específicas si no son necesarias."
 )
 
 PANDAS_SYSTEM = (
@@ -693,7 +906,7 @@ for ex in SQL_FEWSHOTS:
 SQL_PROMPT = ChatPromptTemplate.from_messages(
     [
         ("system", SQL_SYSTEM),
-        ("human", "Esquema (tabla: [columnas]):\n{schema}\n\nPregunta: {question}"),
+        ("human", "Dialecto: {dialect}\n Esquema (tabla: [columnas]):\n{schema}\n\nPregunta: {question}"),
     ]
     + _sql_fewshot_msgs
 )
@@ -809,26 +1022,34 @@ def exec_pandas(code: str, df: pd.DataFrame) -> pd.DataFrame:
 # =========================
 
 
-def answer_mysql(question: str, source: MySQLSource, opts: ChatOptions) -> ChatResponse:
-    schema = extract_mysql_schema(source.sqlalchemy_url)
+def answer_sql(question: str, sqlalchemy_url: str, opts: ChatOptions) -> ChatResponse:
+    dialect = _dialect_from_url(sqlalchemy_url)
+    engine = _make_engine(sqlalchemy_url)
+
+    # 1) esquema
+    try:
+        schema = extract_sql_schema_from_engine(engine)
+    finally:
+        # no cierres aún; lo usamos para ejecutar
+        pass
+
+    # 2) prompt (incluye dialect)
     prompt = SQL_PROMPT.format_messages(
-        schema=json.dumps(schema, ensure_ascii=False), question=question
+        schema=json.dumps(schema, ensure_ascii=False),
+        question=question,
+        dialect=dialect,
     )
     sql_code = (llm | parser).invoke(prompt)
     sql_code = sanitize_sql(sql_code, limit=opts.max_rows)
 
-    engine = create_engine(
-        source.sqlalchemy_url, connect_args={"charset": "utf8mb4"}, pool_pre_ping=True
-    )
+    # 3) ejecutar
     try:
         with engine.connect() as conn:
             res = conn.execute(text(sql_code))
             rows = res.fetchall()
             cols = list(res.keys())
     except SQLAlchemyError as e:
-        raise HTTPException(
-            status_code=400, detail=f"Error SQL: {str(e)} | Query: {sql_code}"
-        )
+        raise HTTPException(status_code=400, detail=f"Error SQL: {str(e)} | Query: {sql_code}")
     finally:
         engine.dispose()
 
@@ -836,19 +1057,17 @@ def answer_mysql(question: str, source: MySQLSource, opts: ChatOptions) -> ChatR
     table = TableData(
         columns=cols, rows=df.astype(object).where(pd.notnull(df), None).values.tolist()
     )
-
     answer_text = (
-        f"Mostrando {len(table.rows)} fila(s)."
-        if opts.language == "es"
+        f"Mostrando {len(table.rows)} fila(s)." if opts.language == "es"
         else f"Showing {len(table.rows)} row(s)."
     )
-
     return ChatResponse(
         answer_text=answer_text,
         generated={"type": "sql", "code": sql_code},
         table=table,
         notices=[],
     )
+
 
 
 def answer_excel(question: str, source: ExcelSource, opts: ChatOptions) -> ChatResponse:
@@ -929,24 +1148,32 @@ def answer_excel(question: str, source: ExcelSource, opts: ChatOptions) -> ChatR
 # =========================
 # FastAPI
 # =========================
-app = FastAPI(title="DataChatbot MVP", version="0.1.0")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest, _: dict = Depends(require_jwt)):
-    if req.datasource.type == "mysql":
-        return answer_mysql(req.question, req.datasource, req.options)
-    elif req.datasource.type == "excel":
-        return answer_excel(req.question, req.datasource, req.options)
-    else:
-        raise HTTPException(status_code=400, detail="Datasource no soportado")
+def chat(req: ChatRequest, payload: dict = Depends(require_jwt), db: Session = Depends(get_db)):
+    # ❌ los admins no usan el chatbot
+    if str(payload.get("role", "")).lower() == "admin":
+        raise HTTPException(status_code=403, detail="Admins no pueden usar el chatbot")
+
+    ds = req.datasource
+
+    if ds.type == "excel":
+        return answer_excel(req.question, ds, req.options)
+
+    # conexiones SQL directas
+    if ds.type in ("mysql", "postgres", "sqlite"):
+        return answer_sql(req.question, ds.sqlalchemy_url, req.options)
+
+    # conexión guardada por id (admin la creó antes)
+    if ds.type == "saved":
+        conn = db.query(Connection).filter_by(id=ds.connection_id, is_active=True).first()
+        if not conn:
+            raise HTTPException(status_code=404, detail="Conexión no encontrada o inactiva")
+        return answer_sql(req.question, conn.sqlalchemy_url, req.options)
+
+    raise HTTPException(status_code=400, detail="Datasource no soportado")
+
 
 
 # =========================
@@ -967,3 +1194,47 @@ if __name__ == "__main__":
         print(
             "Crea ./empleados.csv con columnas: genero,salario,departamento … para la prueba rápida."
         )
+
+@app.get("/excel/sheets")
+def list_excel_sheets(path: str = Query(..., description="Ruta del archivo .xlsx accesible para el servidor")):
+    path_l = path.lower()
+    if not (path_l.endswith(".xlsx") or path_l.endswith(".xls")):
+        raise HTTPException(status_code=400, detail="Solo se listan hojas para archivos Excel (.xlsx/.xls)")
+
+    try:
+        wb = openpyxl.load_workbook(path, read_only=True)
+        names = wb.sheetnames
+        return {"path": path, "sheets": names}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Archivo no encontrado: {path}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"No se pudieron listar hojas: {e}")
+    
+@app.get("/excel/preview")
+def preview_excel(
+    path: str,
+    sheet_name: str | int | None = 0,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=500),
+):
+    try:
+        # lee solo la porción necesaria
+        # estrategia simple: leer toda la hoja y paginar en memoria (MVP)
+        df = pd.read_excel(path, sheet_name=sheet_name)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Archivo no encontrado: {path}")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Hoja inválida: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error leyendo Excel: {e}")
+
+    total = len(df)
+    cols = list(df.columns)
+    rows = df.iloc[offset: offset + limit].fillna("").values.tolist()
+
+    return {
+        "sheet": {"name": str(sheet_name)},
+        "columns": cols,
+        "rows": rows,
+        "page": {"offset": offset, "limit": limit, "total": int(total)},
+    }

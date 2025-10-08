@@ -1,8 +1,10 @@
-import { useState } from 'react';
-import { askData } from '../services/api';
+import { useState, useEffect } from 'react';
+import { askData, listExcelSheets, previewExcel } from '../services/api';
 import type { ChatResponse } from '../services/api';
 import './MainPage.css';
 import DataTable from '../components/DataTable';
+import { useAuth } from '../auth/AuthContext';
+import { Link } from 'react-router-dom';
 
 type Msg = {
   role: 'user' | 'assistant';
@@ -11,50 +13,105 @@ type Msg = {
   table?: ChatResponse['table'] | null;
 };
 
-type SourceType = 'mysql' | 'excel';
+type SourceType = 'mysql' | 'excel' | 'saved';
 
 export default function MainPage() {
+  const { auth } = useAuth();
+
+  // Chat
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Panel conexión
   const [showConn, setShowConn] = useState(false);
-
-  // conexión / opciones
-  const [token, setToken] = useState(
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1IjoiZGVtbyJ9.fZAPV-j6IYbQh3LiJirVqWIo5y5HqXkwFB3APoyhr9c',
-  );
   const [lang, setLang] = useState<'es' | 'en'>('es');
   const [source, setSource] = useState<SourceType>('mysql');
 
   // MySQL
   const [sqlUrl, setSqlUrl] = useState(
-    'mysql+pymysql://app:app@localhost:3306/empresa_demo?charset=utf8mb4',
+    'mysql+pymysql://app:app@localhost:3306/empresa_demo?charset=utf8mb4'
   );
 
   // Excel
-  const [excelPath, setExcelPath] = useState('C:/data/empleados.xlsx'); // ruta visible por el servidor (MVP)
+  const [excelPath, setExcelPath] = useState('C:/data/empleados.xlsx');
   const [sheetName, setSheetName] = useState<string | number | undefined>(0);
+  const [sheets, setSheets] = useState<string[]>([]);
+  const [preview, setPreview] = useState<null | { columns: string[]; rows: any[][]; total: number }>(null);
+  const [offset, setOffset] = useState(0);
+  const limit = 50;
+
+  // Saved (admin)
+  const [connectionId, setConnectionId] = useState<number | ''>('');
 
   const pushMessage = (m: Msg) => setMessages(prev => [...prev, m]);
 
+  // =========================
+  // 📡 US05: Cargar hojas Excel
+  // =========================
+  useEffect(() => {
+    if (source !== 'excel' || !excelPath) return;
+    setSheets([]);
+    setPreview(null);
+    setOffset(0);
+
+    listExcelSheets(excelPath)
+      .then(({ sheets }) => {
+        setSheets(sheets);
+        const next = sheets?.length ? sheets[0] : 0;
+        setSheetName(prev => (prev && sheets.includes(String(prev)) ? prev : next));
+      })
+      .catch(() => setError('No se pudieron cargar las hojas del Excel'));
+  }, [source, excelPath]);
+
+  // =========================
+  // 📄 US05: Previsualizar hoja
+  // =========================
+  useEffect(() => {
+    if (source !== 'excel' || !excelPath || sheetName === undefined || sheetName === null) return;
+    setError('');
+    previewExcel(excelPath, sheetName, offset, limit)
+      .then(r => setPreview({ columns: r.columns, rows: r.rows, total: r.page.total }))
+      .catch(() => setError('No se pudo previsualizar la hoja seleccionada'));
+  }, [source, excelPath, sheetName, offset]);
+
+  // =========================
+  // 💬 Enviar mensaje
+  // =========================
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     const q = input.trim();
     if (!q) return;
+
+    if (source === 'mysql' && !sqlUrl) {
+      setError('Debes indicar la SQLAlchemy URL para MySQL.');
+      return;
+    }
+    if (source === 'excel' && !excelPath) {
+      setError('Debes indicar la ruta del Excel en el servidor.');
+      return;
+    }
+    if (source === 'saved' && (connectionId === '' || isNaN(Number(connectionId)))) {
+      setError('Debes indicar un Connection ID válido (número).');
+      return;
+    }
+
     setInput('');
     pushMessage({ role: 'user', text: q });
     setLoading(true);
+
     try {
       const datasource =
         source === 'mysql'
           ? ({ type: 'mysql', sqlalchemy_url: sqlUrl } as const)
-          : ({ type: 'excel', path: excelPath, sheet_name: sheetName } as const);
+          : source === 'excel'
+          ? ({ type: 'excel', path: excelPath, sheet_name: sheetName } as const)
+          : ({ type: 'saved', connection_id: Number(connectionId) } as const);
 
       const resp = await askData({
-        token,
+        token: auth.token,
         question: q,
         datasource,
         options: { language: lang, max_rows: 200 },
@@ -74,6 +131,9 @@ export default function MainPage() {
     }
   };
 
+  // =========================
+  // 🧠 Render
+  // =========================
   return (
     <>
       {/* HERO */}
@@ -81,8 +141,8 @@ export default function MainPage() {
         <div className="container center">
           <h1 className="hero-title">Ask Your Data Anything</h1>
           <p className="hero-sub">
-            Get Instant insights from your company database using natural language. No SQL-Excel
-            knowledge required
+            Get instant insights from your company database using natural language. No SQL-Excel
+            knowledge required.
           </p>
           <div className="suggestions">
             {[
@@ -99,7 +159,6 @@ export default function MainPage() {
       </section>
 
       {/* PANEL DE CONEXIÓN */}
-      {/* PANEL DE CONEXIÓN (colapsable) */}
       <section className="container mt-16">
         <div className="chat-card" style={{ borderTop: '1px solid #e7e3ef', borderRadius: 16 }}>
           <div className="conn-header">
@@ -116,16 +175,9 @@ export default function MainPage() {
             </button>
           </div>
 
-          <div
-            id="conn-body"
-            className={`conn-body ${showConn ? 'open' : 'closed'}`}
-            aria-hidden={!showConn}
-          >
-            {/* Selección de origen */}
-            <div
-              className="connection-controls"
-              style={{ display: 'flex', gap: 12, margin: '10px 0' }}
-            >
+          <div id="conn-body" className={`conn-body ${showConn ? 'open' : 'closed'}`} aria-hidden={!showConn}>
+            {/* Tipo de fuente */}
+            <div className="connection-controls" style={{ display: 'flex', gap: 12, margin: '10px 0' }}>
               <label>
                 <input
                   type="radio"
@@ -146,25 +198,23 @@ export default function MainPage() {
                 />
                 Excel
               </label>
+              <label>
+                <input
+                  type="radio"
+                  name="source"
+                  value="saved"
+                  checked={source === 'saved'}
+                  onChange={() => setSource('saved')}
+                />
+                Saved (admin)
+              </label>
             </div>
 
-            {/* Campos comunes */}
+            {/* Config común */}
             <div style={{ display: 'grid', gap: 10 }}>
-              <label className="text-sm">
-                JWT
-                <input
-                  value={token}
-                  onChange={e => setToken(e.target.value)}
-                  placeholder="Bearer token"
-                  style={{
-                    width: '100%',
-                    padding: 10,
-                    borderRadius: 10,
-                    border: '1px solid #d9d9e3',
-                    marginTop: 6,
-                  }}
-                />
-              </label>
+              <div className="text-sm" style={{ color: '#6b7280' }}>
+                {auth?.token ? `Sesión iniciada (${auth.role?.toUpperCase() || 'USER'})` : 'No has iniciado sesión'}
+              </div>
 
               <label className="text-sm">
                 Language
@@ -184,7 +234,7 @@ export default function MainPage() {
                 </select>
               </label>
 
-              {source === 'mysql' ? (
+              {source === 'mysql' && (
                 <label className="text-sm">
                   SQLAlchemy URL
                   <input
@@ -200,7 +250,10 @@ export default function MainPage() {
                     }}
                   />
                 </label>
-              ) : (
+              )}
+
+              {/* Excel */}
+              {source === 'excel' && (
                 <>
                   <label className="text-sm">
                     Excel path (server-visible)
@@ -217,28 +270,59 @@ export default function MainPage() {
                       }}
                     />
                   </label>
-                  <label className="text-sm">
-                    Sheet name / index (opcional)
-                    <input
-                      value={String(sheetName ?? '')}
-                      onChange={e => {
-                        const s = e.target.value;
-                        setSheetName(s === '' ? undefined : isNaN(Number(s)) ? s : Number(s));
-                      }}
-                      placeholder="0"
-                      style={{
-                        width: '100%',
-                        padding: 10,
-                        borderRadius: 10,
-                        border: '1px solid #d9d9e3',
-                        marginTop: 6,
-                      }}
-                    />
-                  </label>
-                  <div className="text-sm" style={{ color: '#6b7280' }}>
-                    * En este MVP el backend lee el archivo desde una ruta local del servidor.
+
+                  {/* Selector de hoja */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm">Sheet:</label>
+                      <select
+                        className="border rounded px-2 py-1"
+                        value={String(sheetName ?? '')}
+                        onChange={e => {
+                          setOffset(0);
+                          setSheetName(e.target.value);
+                        }}
+                      >
+                        {sheets.map(n => (
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="text-xs opacity-70">
+                        {preview ? `${preview.total} filas` : ''}
+                      </span>
+                    </div>
+
+                    {/* Vista previa */}
+                    {preview && preview.rows.length > 0 && (
+                      <div className="border rounded">
+                        <DataTable columns={preview.columns} rows={preview.rows} defaultPageSize={10} />
+                      </div>
+                    )}
+
                   </div>
                 </>
+              )}
+
+              {source === 'saved' && (
+                <label className="text-sm">
+                  Connection ID
+                  <input
+                    value={String(connectionId)}
+                    onChange={e =>
+                      setConnectionId(e.target.value === '' ? '' : Number(e.target.value))
+                    }
+                    placeholder="1"
+                    style={{
+                      width: '100%',
+                      padding: 10,
+                      borderRadius: 10,
+                      border: '1px solid #d9d9e3',
+                      marginTop: 6,
+                    }}
+                  />
+                </label>
               )}
             </div>
           </div>
@@ -326,8 +410,8 @@ export default function MainPage() {
                                     padding: '8px',
                                     textAlign: 'left',
                                     fontWeight: 600,
-                                    background: '#f1f5f9', // gris claro de fondo
-                                    color: '#111827', // texto oscuro
+                                    background: '#f1f5f9',
+                                    color: '#111827',
                                   }}
                                 >
                                   {c}

@@ -10,3 +10,4 @@ langchain-openai
 langchain-text-splitters
 pydantic>=2,<3
 python-dotenv
+PyJWT
