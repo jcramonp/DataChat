@@ -19,28 +19,34 @@ export default function NavBar() {
     nav('/login', { replace: true });
   };
 
+
   return (
-    <header className="dc-nav">
-      <div className="container nav-inner">
-        <div className="dc-brand"><Logo size={30} /></div>
+      <header className="dc-nav">
+        <div className="container nav-inner">
+          <div className="dc-brand"><Logo size={30}/></div>
 
-        <nav className="dc-tabs">
-          <Tab to="/">Home</Tab>
-          {/* usuarios comunes ven Main; admin ve Admin */}
-          {role === 'admin' ? <Tab to="/admin/users">Admin</Tab> : <Tab to="/main">Main</Tab>}
-        </nav>
+          <nav className="dc-tabs">
+            <Tab to="/">Home</Tab>
+            {role === "admin" ? (
+                <>
+                  <Tab to="/admin/sessions">Admin</Tab> {/* o “Sesiones” si prefieres */}
+                </>
+            ) : (
+                <Tab to="/main">Main</Tab>
+            )}
+          </nav>
 
-        <div>
-          {token ? (
-            <>
-              <span className="nav-pill" style={{ marginRight: 8 }}>{(role || '').toUpperCase()}</span>
-              <button className="nav-pill" onClick={logout}>Logout</button>
-            </>
-          ) : (
-            <Link to="/login" className="nav-pill">Login</Link>
-          )}
+          <div>
+            {token ? (
+                <>
+                  <span className="nav-pill" style={{marginRight: 8}}>{(role || '').toUpperCase()}</span>
+                  <button className="nav-pill" onClick={logout}>Logout</button>
+                </>
+            ) : (
+                <Link to="/login" className="nav-pill">Login</Link>
+            )}
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
   );
 }
