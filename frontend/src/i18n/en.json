@@ -67,7 +67,36 @@
       "q3": "Which customers have the highest orders?"
     }
   },
-  "welcome": "Welcome to DataChat",
-  "inputPlaceholder": "Type your question...",
-  "send": "Send"
+  "nav2": { "faq": "FAQ" },
+  "faq": {
+    "title": "Frequently Asked Questions",
+    "intro": "Quick answers to the most common questions about DataChat.",
+    "items": [
+      {
+        "q": "I see “Unauthorized (invalid JWT)”. What do I do?",
+        "a": "Your session expired. Log out and sign in again from the Login page."
+      },
+      {
+        "q": "How do I connect to MySQL?",
+        "a": "Open the Connection panel, choose MySQL, and paste a valid SQLAlchemy URL (e.g., mysql+pymysql://user:pass@host:3306/db)."
+      },
+      {
+        "q": "How do I query an Excel file?",
+        "a": "Choose Excel, enter the server-visible path (e.g., C:/data/employees.xlsx), select a sheet, and then ask your question."
+      },
+      {
+        "q": "Why do I get “Error contacting the backend”?",
+        "a": "The API may be down or blocked by CORS. Ensure the FastAPI server is running and CORS allows http://localhost:5173."
+      },
+      {
+        "q": "How do I change the app language?",
+        "a": "Use the language selector in the top bar or in the Connection panel. Your choice is saved automatically."
+      },
+      {
+        "q": "How many rows are returned?",
+        "a": "By default we limit results (e.g., max_rows: 200). You can adjust this in the request options."
+      }
+    ]
+  }
 }
+

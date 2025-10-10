@@ -29,6 +29,7 @@ export default function NavBar() {
 
         <nav className="dc-tabs">
           <Tab to="/">{t("nav.home")}</Tab>
+          <Tab to="/faq">{t("nav2.faq")}</Tab>
           {role === 'admin'
             ? <Tab to="/admin/users">{t("nav.admin")}</Tab>
             : <Tab to="/main">{t("nav.main")}</Tab>}
