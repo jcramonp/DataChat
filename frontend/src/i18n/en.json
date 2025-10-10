@@ -1,0 +1,73 @@
+{
+  "landing": {
+    "title": "Query your data. No SQL. No formulas",
+    "subtitle": "Convert Spanish and English questions to database queries instantly. Get clear answers without technical knowledge.",
+    "cta": "Start Now"
+  },
+  "login": {
+    "title": "Login",
+    "email": "email",
+    "password": "password",
+    "submit": "Sign in",
+    "errorGeneric": "Login error"
+  },
+  "nav": {
+    "home": "Home",
+    "admin": "Admin",
+    "main": "Main",
+    "login": "Login",
+    "logout": "Logout"
+  },
+  "language": "Language",
+  "session": {
+    "signedIn": "Signed in ({{role}})",
+    "signedOut": "You are not signed in"
+  },
+  "common": {
+    "show": "Show",
+    "hide": "Hide",
+    "viewQuery": "View query",
+    "copy": "Copy",
+    "newChat": "New Chat"
+  },
+  "errors": {
+    "backend": "Error contacting the backend.",
+    "unauthorized": "Unauthorized (invalid JWT). Please sign in again.",
+    "forbidden": "You don't have permission.",
+    "not_found": "Resource not found.",
+    "network": "Network error. Check your connection.",
+    "excelSheets": "Could not load Excel sheets.",
+    "excelPreview": "Could not preview the selected sheet.",
+    "missingSqlUrl": "You must provide the SQLAlchemy URL for MySQL.",
+    "missingExcelPath": "You must provide the Excel path on the server.",
+    "invalidConnectionId": "You must provide a valid numeric Connection ID."
+  },
+  "main": {
+    "connection": { "title": "Connection" },
+    "labels": {
+      "sqlalchemyUrl": "SQLAlchemy URL",
+      "excelPath": "Excel path (server-visible)",
+      "sheet": "Sheet:",
+      "rows": "rows",
+      "connectionId": "Connection ID",
+      "savedAdmin": "Saved (admin)"
+    },
+    "chat": {
+      "placeholder": "Ask me anything about your data…",
+      "send": "Send",
+      "sending": "Sending…",
+      "thinking": "DataChat is thinking…"
+    },
+    "mysql": { "placeholder": "mysql+pymysql://user:pass@host:3306/db" },
+    "excel": { "placeholder": "C:/data/employees.xlsx" },
+    "saved": { "placeholder": "Connection ID" },
+    "suggestions": {
+      "q1": "How many employees joined this year?",
+      "q2": "Show me sales by region",
+      "q3": "Which customers have the highest orders?"
+    }
+  },
+  "welcome": "Welcome to DataChat",
+  "inputPlaceholder": "Type your question...",
+  "send": "Send"
+}

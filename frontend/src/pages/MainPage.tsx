@@ -5,6 +5,7 @@ import './MainPage.css';
 import DataTable from '../components/DataTable';
 import { useAuth } from '../auth/AuthContext';
 import { Link } from 'react-router-dom';
+import { useTranslation } from "react-i18next";
 
 type Msg = {
   role: 'user' | 'assistant';
@@ -17,6 +18,7 @@ type SourceType = 'mysql' | 'excel' | 'saved';
 
 export default function MainPage() {
   const { auth } = useAuth();
+  const { t } = useTranslation();
 
   // Chat
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -47,9 +49,7 @@ export default function MainPage() {
 
   const pushMessage = (m: Msg) => setMessages(prev => [...prev, m]);
 
-  // =========================
-  // 📡 US05: Cargar hojas Excel
-  // =========================
+  //  US05: Cargar hojas Excel
   useEffect(() => {
     if (source !== 'excel' || !excelPath) return;
     setSheets([]);
@@ -62,39 +62,38 @@ export default function MainPage() {
         const next = sheets?.length ? sheets[0] : 0;
         setSheetName(prev => (prev && sheets.includes(String(prev)) ? prev : next));
       })
-      .catch(() => setError('No se pudieron cargar las hojas del Excel'));
+      .catch(() => setError(t("errors.excelSheets")));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, excelPath]);
 
-  // =========================
-  // 📄 US05: Previsualizar hoja
-  // =========================
+  //  US05: Previsualizar hoja
   useEffect(() => {
     if (source !== 'excel' || !excelPath || sheetName === undefined || sheetName === null) return;
     setError('');
     previewExcel(excelPath, sheetName, offset, limit)
       .then(r => setPreview({ columns: r.columns, rows: r.rows, total: r.page.total }))
-      .catch(() => setError('No se pudo previsualizar la hoja seleccionada'));
+      .catch(() => setError(t("errors.excelPreview")));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, excelPath, sheetName, offset]);
 
-  // =========================
-  // 💬 Enviar mensaje
-  // =========================
+  //  Enviar mensaje
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     const q = input.trim();
     if (!q) return;
 
+    // Validaciones previas al envío
     if (source === 'mysql' && !sqlUrl) {
-      setError('Debes indicar la SQLAlchemy URL para MySQL.');
+      setError(t("errors.missingSqlUrl"));
       return;
     }
     if (source === 'excel' && !excelPath) {
-      setError('Debes indicar la ruta del Excel en el servidor.');
+      setError(t("errors.missingExcelPath"));
       return;
     }
     if (source === 'saved' && (connectionId === '' || isNaN(Number(connectionId)))) {
-      setError('Debes indicar un Connection ID válido (número).');
+      setError(t("errors.invalidConnectionId"));
       return;
     }
 
@@ -124,31 +123,39 @@ export default function MainPage() {
         table: resp.table ?? null,
       });
     } catch (err: any) {
-      setError(err?.message || 'No se pudo obtener respuesta del servidor.');
-      pushMessage({ role: 'assistant', text: '⚠️ Error consultando el backend.' });
+      const msg = (err?.message || "").toLowerCase();
+      if (err?.status === 401 || msg.includes("jwt") || msg.includes("unauthorized") || msg.includes("no autorizado")) {
+        setError(t("errors.unauthorized"));
+      } else if (err?.status === 403) {
+        setError(t("errors.forbidden"));
+      } else if (err?.status === 404) {
+        setError(t("errors.not_found"));
+      } else if (msg.includes("network")) {
+        setError(t("errors.network"));
+      } else {
+        setError(t("errors.backend"));
+      }
+      pushMessage({ role: 'assistant', text: `⚠️ ${t("errors.backend")}` });
     } finally {
       setLoading(false);
     }
   };
 
-  // =========================
-  // 🧠 Render
-  // =========================
-  return (
+  // Render
+  return(
     <>
       {/* HERO */}
       <section className="hero">
         <div className="container center">
-          <h1 className="hero-title">Ask Your Data Anything</h1>
+          <h1 className="hero-title">{t("landing.title")}</h1>
           <p className="hero-sub">
-            Get instant insights from your company database using natural language. No SQL-Excel
-            knowledge required.
+            {t("landing.subtitle")}
           </p>
           <div className="suggestions">
             {[
-              'How many employees joined this year?',
-              'Show me sales by region',
-              'Which customers have the highest orders',
+              t("main.suggestions.q1"),
+              t("main.suggestions.q2"),
+              t("main.suggestions.q3"),
             ].map(s => (
               <button key={s} type="button" onClick={() => setInput(s)}>
                 {s}
@@ -162,16 +169,16 @@ export default function MainPage() {
       <section className="container mt-16">
         <div className="chat-card" style={{ borderTop: '1px solid #e7e3ef', borderRadius: 16 }}>
           <div className="conn-header">
-            <h3 style={{ marginTop: 0 }}>Connection</h3>
+            <h3 style={{ marginTop: 0 }}>{t("main.connection.title")}</h3>
             <button
               type="button"
               className="toggle-btn"
               onClick={() => setShowConn(s => !s)}
               aria-expanded={showConn}
               aria-controls="conn-body"
-              title={showConn ? 'Hide' : 'Show'}
+              title={showConn ? t("common.hide") : t("common.show")}
             >
-              {showConn ? 'Hide' : 'Show'}
+              {showConn ? t("common.hide") : t("common.show")}
             </button>
           </div>
 
@@ -180,44 +187,36 @@ export default function MainPage() {
             <div className="connection-controls" style={{ display: 'flex', gap: 12, margin: '10px 0' }}>
               <label>
                 <input
-                  type="radio"
-                  name="source"
-                  value="mysql"
-                  checked={source === 'mysql'}
-                  onChange={() => setSource('mysql')}
+                  value={sqlUrl}
+                  onChange={e => setSqlUrl(e.target.value)}
+                  placeholder={t("main.mysql.placeholder")}
                 />
-                MySQL
-              </label>
-              <label>
+
                 <input
-                  type="radio"
-                  name="source"
-                  value="excel"
-                  checked={source === 'excel'}
-                  onChange={() => setSource('excel')}
+                  value={excelPath}
+                  onChange={e => setExcelPath(e.target.value)}
+                  placeholder={t("main.excel.placeholder")}
                 />
-                Excel
-              </label>
-              <label>
+
                 <input
-                  type="radio"
-                  name="source"
-                  value="saved"
-                  checked={source === 'saved'}
-                  onChange={() => setSource('saved')}
+                  value={String(connectionId)}
+                  onChange={e => setConnectionId(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder={t("main.saved.placeholder")}
                 />
-                Saved (admin)
+                {t("main.labels.savedAdmin")}
               </label>
             </div>
 
             {/* Config común */}
             <div style={{ display: 'grid', gap: 10 }}>
               <div className="text-sm" style={{ color: '#6b7280' }}>
-                {auth?.token ? `Sesión iniciada (${auth.role?.toUpperCase() || 'USER'})` : 'No has iniciado sesión'}
+                {auth?.token
+                  ? t("session.signedIn", { role: (auth.role?.toUpperCase() || 'USER') })
+                  : t("session.signedOut")}
               </div>
 
               <label className="text-sm">
-                Language
+                {t("language")}
                 <select
                   value={lang}
                   onChange={e => setLang(e.target.value as 'es' | 'en')}
@@ -236,11 +235,11 @@ export default function MainPage() {
 
               {source === 'mysql' && (
                 <label className="text-sm">
-                  SQLAlchemy URL
+                  {t("main.labels.sqlalchemyUrl")}
                   <input
                     value={sqlUrl}
                     onChange={e => setSqlUrl(e.target.value)}
-                    placeholder="mysql+pymysql://user:pass@host:3306/db"
+                    placeholder={t("main.mysql.placeholder")}
                     style={{
                       width: '100%',
                       padding: 10,
@@ -256,11 +255,11 @@ export default function MainPage() {
               {source === 'excel' && (
                 <>
                   <label className="text-sm">
-                    Excel path (server-visible)
+                    {t("main.labels.excelPath")}
                     <input
                       value={excelPath}
                       onChange={e => setExcelPath(e.target.value)}
-                      placeholder="C:/data/empleados.xlsx"
+                      placeholder={t("main.excel.placeholder")}
                       style={{
                         width: '100%',
                         padding: 10,
@@ -274,7 +273,7 @@ export default function MainPage() {
                   {/* Selector de hoja */}
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <label className="text-sm">Sheet:</label>
+                      <label className="text-sm">{t("main.labels.sheet")}</label>
                       <select
                         className="border rounded px-2 py-1"
                         value={String(sheetName ?? '')}
@@ -290,7 +289,7 @@ export default function MainPage() {
                         ))}
                       </select>
                       <span className="text-xs opacity-70">
-                        {preview ? `${preview.total} filas` : ''}
+                        {preview ? `${preview.total} ${t("main.labels.rows")}` : ''}
                       </span>
                     </div>
 
@@ -307,7 +306,7 @@ export default function MainPage() {
 
               {source === 'saved' && (
                 <label className="text-sm">
-                  Connection ID
+                  {t("main.labels.connectionId")}
                   <input
                     value={String(connectionId)}
                     onChange={e =>
@@ -335,7 +334,7 @@ export default function MainPage() {
           <div className="chat-header">
             <h3>DataChat Assistant</h3>
             <div className="chat-actions">
-              <button type="button" title="New Chat" onClick={() => setMessages([])}>
+              <button type="button" title={t("common.newChat")} onClick={() => setMessages([])}>
                 ＋
               </button>
             </div>
@@ -349,7 +348,7 @@ export default function MainPage() {
                 {m.role === 'assistant' && m.sql?.code && (
                   <details style={{ marginTop: 8 }}>
                     <summary style={{ cursor: 'pointer', fontWeight: 'bold' }}>
-                      View Query{' '}
+                      {t("common.viewQuery")}{' '}
                       <span
                         style={{
                           marginLeft: 6,
@@ -389,7 +388,7 @@ export default function MainPage() {
                         fontWeight: 600,
                       }}
                     >
-                      Copy
+                      {t("common.copy")}
                     </button>
                     {m.table && m.table.columns?.length ? (
                       <div style={{ marginTop: 12, overflowX: 'auto' }}>
@@ -444,7 +443,7 @@ export default function MainPage() {
                 )}
               </div>
             ))}
-            {loading && <div className="msg assistant">… DataChat is thinking</div>}
+            {loading && <div className="msg assistant">… {t("main.chat.thinking")}</div>}
           </div>
 
           {error && <div className="error">{error}</div>}
@@ -453,14 +452,10 @@ export default function MainPage() {
             <input
               value={input}
               onChange={e => setInput(e.target.value)}
-              placeholder={
-                lang === 'es'
-                  ? '¿Cuántos empleados hay en la sede 2?'
-                  : 'How many employees are in site 2?'
-              }
+              placeholder={t("main.chat.placeholder")}
             />
             <button type="submit" disabled={loading}>
-              {loading ? 'Sending…' : 'Send'}
+              {loading ? t("main.chat.sending") : t("main.chat.send")}
             </button>
           </form>
         </div>

@@ -1,0 +1,70 @@
+{
+  "landing": {
+    "title": "Consulta tus datos. Sin SQL. Sin fórmulas",
+    "subtitle": "Convierte preguntas en español o inglés en consultas a la base de datos al instante. Obtén respuestas claras sin conocimientos técnicos.",
+    "cta": "Comenzar"
+  },
+  "login": {
+    "title": "Ingresar",
+    "email": "correo",
+    "password": "contraseña",
+    "submit": "Entrar",
+    "errorGeneric": "Error de login"
+  },
+  "nav": {
+    "home": "Inicio",
+    "admin": "Admin",
+    "main": "Principal",
+    "login": "Entrar",
+    "logout": "Salir"
+  },
+  "language": "Idioma",
+  "session": {
+    "signedIn": "Sesión iniciada ({{role}})",
+    "signedOut": "No has iniciado sesión"
+  },
+  "common": {
+    "show": "Mostrar",
+    "hide": "Ocultar",
+    "viewQuery": "Ver consulta",
+    "copy": "Copiar",
+    "newChat": "Nuevo chat"
+  },
+  "errors": {
+    "backend": "Error consultando el backend.",
+    "unauthorized": "No autorizado (JWT inválido). Inicia sesión de nuevo.",
+    "forbidden": "No tienes permisos.",
+    "not_found": "Recurso no encontrado.",
+    "network": "Error de red. Verifica tu conexión.",
+    "excelSheets": "No se pudieron cargar las hojas del Excel.",
+    "excelPreview": "No se pudo previsualizar la hoja seleccionada.",
+    "missingSqlUrl": "Debes indicar la SQLAlchemy URL para MySQL.",
+    "missingExcelPath": "Debes indicar la ruta del Excel en el servidor.",
+    "invalidConnectionId": "Debes indicar un Connection ID válido (número)."
+  },
+  "main": {
+    "connection": { "title": "Conexión" },
+    "labels": {
+      "sqlalchemyUrl": "SQLAlchemy URL",
+      "excelPath": "Ruta de Excel (visible para el servidor)",
+      "sheet": "Hoja:",
+      "rows": "filas",
+      "connectionId": "Connection ID",
+      "savedAdmin": "Guardada (admin)"
+    },
+    "chat": {
+      "placeholder": "Pregúntame lo que quieras de tus datos…",
+      "send": "Enviar",
+      "sending": "Enviando…",
+      "thinking": "DataChat está pensando…"
+    },
+    "mysql": { "placeholder": "mysql+pymysql://usuario:clave@host:3306/db" },
+    "excel": { "placeholder": "C:/data/empleados.xlsx" },
+    "saved": { "placeholder": "ID de conexión" },
+    "suggestions": {
+      "q1": "¿Cuántos empleados ingresaron este año?",
+      "q2": "Muestra ventas por región",
+      "q3": "¿Qué clientes tienen más pedidos?"
+    }
+  }
+}
