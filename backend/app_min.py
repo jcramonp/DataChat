@@ -1,9 +1,11 @@
 from __future__ import annotations
-import os, json, re
+
+import os, json, re, unicodedata
 from typing import Any, Dict, List, Optional, Tuple, Literal, Union, Annotated
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4  # 👈 necesario para jti
 
-from fastapi import FastAPI, Depends, HTTPException, status, Depends
+from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
@@ -21,11 +23,13 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.sql import func
 from sqlalchemy.engine import Engine
 
-from cryptography.fernet import Fernet, InvalidToken
-
 import pandas as pd
 from dotenv import load_dotenv
 from passlib.context import CryptContext
+
+from fastapi import Query
+import openpyxl
+
 
 # ========= Env & App =========
 load_dotenv()
@@ -39,33 +43,51 @@ app.add_middleware(
 )
 
 # ========= Seguridad / JWT =========
-JWT_SECRET = os.getenv("JWT_SECRET", "dev")     # cámbialo en prod
+JWT_SECRET = os.getenv("JWT_SECRET", "dev")
 JWT_ALG = "HS256"
 JWT_EXPIRE_MINUTES = 120
 
-# Usa Argon2 (evita líos de bcrypt en Windows)
 pwd_ctx = CryptContext(schemes=["argon2"], deprecated="auto")
-
 auth_scheme = HTTPBearer(auto_error=True)
 
-# ========= Persistencia de usuarios (SQLite) =========
-DB_URL = os.getenv("AUTH_DB_URL", "sqlite:///./auth.db")
+class SessionOut(BaseModel):
+    jti: str
+    sub: str
+    role: str
+    issued_at: int
+    expires_at: int
+    last_seen: int
+    revoked: bool = False
+
+SESSIONS: dict[str, SessionOut] = {}
 
 def require_jwt(credentials: HTTPAuthorizationCredentials = Depends(auth_scheme)) -> dict:
     token = credentials.credentials
     try:
-        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expirado")
-    except (jwt.InvalidTokenError, PyJWTError) as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Token inválido: {e}")
+        raise HTTPException(status_code=401, detail="Token expirado")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Token inválido")
+
+    jti = payload.get("jti")
+    s = SESSIONS.get(jti)
+    if not s or s.revoked:
+        raise HTTPException(status_code=401, detail="Sesión inválida o revocada")
+
+    s.last_seen = int(datetime.now(tz=timezone.utc).timestamp())
+    SESSIONS[jti] = s
+    return payload
 
 def create_jwt(sub: str, role: str, extra: dict | None = None) -> str:
+    now = int(datetime.now(tz=timezone.utc).timestamp())
+    exp = int((datetime.now(tz=timezone.utc) + timedelta(minutes=JWT_EXPIRE_MINUTES)).timestamp())
     payload = {
         "sub": sub,
         "role": role,
-        "iat": int(datetime.now(tz=timezone.utc).timestamp()),
-        "exp": int((datetime.now(tz=timezone.utc) + timedelta(minutes=JWT_EXPIRE_MINUTES)).timestamp()),
+        "iat": now,
+        "exp": exp,
+        "jti": str(uuid4()),
     }
     if extra:
         payload.update(extra)
@@ -80,6 +102,7 @@ def require_roles(roles: list[str]):
             raise HTTPException(status_code=403, detail="Forbidden: insufficient role")
         return user
     return _dep
+
 
 # ========= Persistencia de usuarios (SQLite) =========
 DB_URL = os.getenv("AUTH_DB_URL", "sqlite:///./auth.db")
@@ -104,7 +127,6 @@ class Connection(Base):
     created_by = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-
 Base.metadata.create_all(bind=engine)
 
 def get_db():
@@ -115,7 +137,6 @@ def get_db():
         db.close()
 
 def seed_admin():
-    """Crea el admin por defecto si no existe."""
     db = SessionLocal()
     try:
         email = "admin@datac.chat"
@@ -151,17 +172,31 @@ class ConnectionOut(BaseModel):
     db_type: str
     sqlalchemy_url: str
     is_active: bool
-
     class Config:
-        from_attributes = True
+        from_attributes = True   # Pydantic v2: si prefieres, usa: model_config = ConfigDict(from_attributes=True)
 
+# ========= Endpoints de AUTH =========
 @app.post("/auth/login")
 def auth_login(req: LoginRequest, db: Session = Depends(get_db)):
     email = req.email.lower().strip()
     u = db.get(User, email)
     if not u or not u.is_active or not pwd_ctx.verify(req.password, u.password_hash):
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
-    token = create_jwt(sub=u.email, role=u.role)
+
+    token = create_jwt(sub=email, role=u.role)
+
+    payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+    jti = payload["jti"]
+    now = payload["iat"]
+    SESSIONS[jti] = SessionOut(
+        jti=jti,
+        sub=payload["sub"],
+        role=payload["role"],
+        issued_at=payload["iat"],
+        expires_at=payload["exp"],
+        last_seen=now,
+        revoked=False,
+    )
     return {"access_token": token, "token_type": "bearer", "role": u.role}
 
 @app.post("/auth/register")
@@ -177,24 +212,16 @@ def auth_register(req: RegisterRequest, _: dict = Depends(require_roles(["admin"
 def auth_me(user=Depends(get_current_user)):
     return user
 
-@app.get("/admin/ping")
-def admin_ping(_: dict = Depends(require_roles(["admin"]))):
-    return {"ok": True, "msg": "pong (admin)"}
+@app.post("/auth/logout")
+def auth_logout(payload: dict = Depends(require_jwt)):
+    jti = payload.get("jti")
+    s = SESSIONS.get(jti)
+    if s:
+        s.revoked = True
+        SESSIONS[jti] = s
+    return {"ok": True}
 
-# =========================
-# Endpoints de Conexiones (admin)
-# =========================
-
-def _validate_connection(sqlalchemy_url: str) -> None:
-    """Levanta si no conecta / no se puede ejecutar SELECT 1."""
-    eng = _make_engine(sqlalchemy_url)
-    try:
-        with eng.connect() as c:
-            c.execute(text("SELECT 1"))
-    finally:
-        eng.dispose()
-
-
+# ========= Endpoints de Conexiones (ADMIN) =========
 @app.post("/admin/connections", response_model=ConnectionOut)
 def admin_create_connection(
     req: CreateConnectionRequest,
@@ -203,15 +230,12 @@ def admin_create_connection(
 ):
     if _dialect_from_url(req.sqlalchemy_url) != req.db_type:
         raise HTTPException(status_code=400, detail="db_type no coincide con la URL")
-
     try:
         _validate_connection(req.sqlalchemy_url)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"No se pudo conectar: {e}")
-
     if db.query(Connection).filter_by(name=req.name).first():
         raise HTTPException(status_code=400, detail="Ya existe una conexión con ese nombre")
-
     conn = Connection(
         name=req.name,
         db_type=req.db_type,
@@ -222,16 +246,22 @@ def admin_create_connection(
     db.add(conn); db.commit(); db.refresh(conn)
     return conn
 
-
 @app.get("/admin/connections", response_model=list[ConnectionOut])
 def admin_list_connections(_: dict = Depends(require_roles(["admin"])), db: Session = Depends(get_db)):
     return db.query(Connection).order_by(Connection.id.desc()).all()
 
-print("[boot] app_min desde:", __file__)
-print("[exec_pandas] v2 cargada (sin locals())")
+@app.get("/admin/sessions", response_model=list[SessionOut])
+def admin_list_sessions(_: dict = Depends(require_roles(["admin"]))):
+    return list(SESSIONS.values())
 
-import json, re, unicodedata
-
+@app.delete("/admin/sessions/{jti}")
+def admin_revoke_session(jti: str, _: dict = Depends(require_roles(["admin"]))):
+    s = SESSIONS.get(jti)
+    if not s:
+        raise HTTPException(status_code=404, detail="Sesión no encontrada")
+    s.revoked = True
+    SESSIONS[jti] = s
+    return {"ok": True, "jti": jti}
 
 def _unwrap_code_block(s: str) -> str:
     s = s.strip()
@@ -1149,7 +1179,6 @@ def answer_excel(question: str, source: ExcelSource, opts: ChatOptions) -> ChatR
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest, payload: dict = Depends(require_jwt), db: Session = Depends(get_db)):
-    # ❌ los admins no usan el chatbot
     if str(payload.get("role", "")).lower() == "admin":
         raise HTTPException(status_code=403, detail="Admins no pueden usar el chatbot")
 
