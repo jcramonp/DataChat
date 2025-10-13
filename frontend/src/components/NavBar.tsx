@@ -1,7 +1,13 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import './NavBar.css';
 import Logo from './Logo';
-import { getAuth, clearAuth } from '../services/api';
+import { getAuth } from '../services/api';
+
+// Locally implement clearAuth if not exported from api
+function clearAuth() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('role');
+}
 
 export default function NavBar() {
   const { pathname } = useLocation();
@@ -26,8 +32,16 @@ export default function NavBar() {
 
         <nav className="dc-tabs">
           <Tab to="/">Home</Tab>
+
           {/* usuarios comunes ven Main; admin ve Admin */}
-          {role === 'admin' ? <Tab to="/admin/users">Admin</Tab> : <Tab to="/main">Main</Tab>}
+          {role === 'admin'
+            ? <Tab to="/admin/users">Admin</Tab>
+            : (
+              <>
+                <Tab to="/main">Main</Tab>
+              </>
+            )
+          }
         </nav>
 
         <div>

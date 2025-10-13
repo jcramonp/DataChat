@@ -5,6 +5,7 @@ import './MainPage.css';
 import DataTable from '../components/DataTable';
 import { useAuth } from '../auth/AuthContext';
 import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom'; // ✅ ya lo tienes
 
 type Msg = {
   role: 'user' | 'assistant';
@@ -18,6 +19,7 @@ type SourceType = 'mysql' | 'excel' | 'saved';
 
 export default function MainPage() {
   const { auth } = useAuth();
+  const navigate = useNavigate(); // NEW ✅ para navegar a /history
 
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
@@ -256,9 +258,27 @@ export default function MainPage() {
         <div className="chat-card">
           <div className="chat-header">
             <h3>DataChat Assistant</h3>
-            <div className="chat-actions">
+            <div className="chat-actions" style={{ display: 'flex', gap: 8 }}>
               <button type="button" title="New Chat" onClick={() => setMessages([])}>
                 ＋
+              </button>
+
+              {/* NEW: botón Historial dentro del chat */}
+              <button
+                type="button"
+                title="Ver historial"
+                onClick={() => navigate('/history')}
+                style={{
+                  border: 'none',
+                  borderRadius: 8,
+                  padding: '6px 12px',
+                  cursor: 'pointer',
+                  background: '#f0ecfb',
+                  color: '#5a49d6',
+                  fontWeight: 600,
+                }}
+              >
+                Historial
               </button>
             </div>
           </div>

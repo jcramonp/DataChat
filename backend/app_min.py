@@ -1,5 +1,5 @@
 from __future__ import annotations
-import os, json, re
+import os, json, re, sqlite3
 from typing import Any, Dict, List, Optional, Tuple, Literal, Union, Annotated
 from datetime import datetime, timedelta, timezone
 
@@ -7,7 +7,6 @@ from fastapi import FastAPI, Depends, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
-
 from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -26,6 +25,121 @@ from cryptography.fernet import Fernet, InvalidToken
 import pandas as pd
 from dotenv import load_dotenv
 from passlib.context import CryptContext
+
+
+
+# ========= HistoryStore (inlined) =========
+class HistoryStore:
+    def __init__(self, db_path: str = "./backend/history.db") -> None:
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        self.db_path = db_path
+        self._ensure_schema()
+
+    def _conn(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def _ensure_schema(self) -> None:
+        with self._conn() as cx:
+            # tabla base (si no existe)
+            cx.execute(
+                """
+                CREATE TABLE IF NOT EXISTS query_history (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  user_id TEXT NOT NULL,
+                  question TEXT NOT NULL,
+                  datasource_json TEXT NOT NULL,
+                  generated_type TEXT NOT NULL,
+                  generated_code TEXT NOT NULL,
+                  row_count INTEGER NOT NULL,
+                  created_at TEXT NOT NULL
+                )
+                """
+            )
+            # 👇 migración suave: agregar answer_text si falta
+            cols = [r["name"] for r in cx.execute("PRAGMA table_info(query_history)")]
+            if "answer_text" not in cols:
+                cx.execute("ALTER TABLE query_history ADD COLUMN answer_text TEXT NOT NULL DEFAULT ''")
+
+    def add(
+        self,
+        *,
+        user_id: str,
+        question: str,
+        datasource: Dict[str, Any],
+        generated: Dict[str, Any],
+        row_count: int,
+        answer_text: str = "",
+        created_at: Optional[str] = None,
+    ) -> int:
+        if created_at is None:
+            created_at = datetime.now(timezone.utc).isoformat()
+        with self._conn() as cx:
+            cur = cx.execute(
+                """
+                INSERT INTO query_history
+                  (user_id, question, datasource_json, generated_type, generated_code, row_count, created_at, answer_text)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    user_id,
+                    question,
+                    json.dumps(datasource, ensure_ascii=False),
+                    str(generated.get("type", "")),
+                    str(generated.get("code", "")),
+                    int(row_count),
+                    created_at,
+                    answer_text or "",
+                ),
+            )
+            return int(cur.lastrowid)
+
+    def list(
+        self, *, user_id: str, limit: int = 100, offset: int = 0
+    ) -> List[Dict[str, Any]]:
+        with self._conn() as cx:
+            rows = cx.execute(
+                """
+                SELECT id, user_id, question, datasource_json, generated_type, generated_code, row_count, created_at, answer_text
+                FROM query_history
+                WHERE user_id = ?
+                ORDER BY datetime(created_at) DESC
+                LIMIT ? OFFSET ?
+                """,
+                (user_id, limit, offset),
+            ).fetchall()
+            out: List[Dict[str, Any]] = []
+            for r in rows:
+                out.append(
+                    {
+                        "id": r["id"],
+                        "user_id": r["user_id"],
+                        "question": r["question"],
+                        "datasource": json.loads(r["datasource_json"]),
+                        "generated": {
+                            "type": r["generated_type"],
+                            "code": r["generated_code"],
+                        },
+                        "row_count": r["row_count"],
+                        "created_at": r["created_at"],
+                        "answer_text": r["answer_text"],
+                    }
+                )
+            return out
+
+    def clear(self, *, user_id: str) -> int:
+        with self._conn() as cx:
+            cur = cx.execute("DELETE FROM query_history WHERE user_id = ?", (user_id,))
+            return int(cur.rowcount)
+
+    # (si ya agregaste count() antes)
+    def count(self, *, user_id: str) -> int:
+        with self._conn() as cx:
+            row = cx.execute(
+                "SELECT COUNT(*) AS c FROM query_history WHERE user_id = ?", (user_id,)
+            ).fetchone()
+            return int(row["c"]) if row else 0
 
 # ========= Env & App =========
 load_dotenv()
@@ -50,6 +164,8 @@ auth_scheme = HTTPBearer(auto_error=True)
 
 # ========= Persistencia de usuarios (SQLite) =========
 DB_URL = os.getenv("AUTH_DB_URL", "sqlite:///./auth.db")
+
+history_store = HistoryStore("./backend/history.db")
 
 def require_jwt(credentials: HTTPAuthorizationCredentials = Depends(auth_scheme)) -> dict:
     token = credentials.credentials
@@ -580,6 +696,18 @@ class Filter(BaseModel):
     def _before_operator(cls, v):
         return _normalize_op(v)
 
+class HistoryItem(BaseModel):
+    id: int
+    question: str
+    datasource: Dict[str, Any]
+    generated: Dict[str, Any]
+    row_count: int
+    created_at: str
+    answer_text: str
+
+class HistoryList(BaseModel):
+    items: List[HistoryItem]
+    total: int
 
 # --- parser de filtros escritos como string ---
 def _parse_filter_string(s: str) -> Optional[Dict[str, Any]]:
@@ -1155,22 +1283,83 @@ def chat(req: ChatRequest, payload: dict = Depends(require_jwt), db: Session = D
 
     ds = req.datasource
 
+    # === determinar respuesta según datasource ===
     if ds.type == "excel":
-        return answer_excel(req.question, ds, req.options)
-
-    # conexiones SQL directas
-    if ds.type in ("mysql", "postgres", "sqlite"):
-        return answer_sql(req.question, ds.sqlalchemy_url, req.options)
-
-    # conexión guardada por id (admin la creó antes)
-    if ds.type == "saved":
+        resp = answer_excel(req.question, ds, req.options)
+    elif ds.type in ("mysql", "postgres", "sqlite"):
+        resp = answer_sql(req.question, ds.sqlalchemy_url, req.options)
+    elif ds.type == "saved":
         conn = db.query(Connection).filter_by(id=ds.connection_id, is_active=True).first()
         if not conn:
             raise HTTPException(status_code=404, detail="Conexión no encontrada o inactiva")
-        return answer_sql(req.question, conn.sqlalchemy_url, req.options)
+        resp = answer_sql(req.question, conn.sqlalchemy_url, req.options)
+    else:
+        raise HTTPException(status_code=400, detail="Datasource no soportado")
 
-    raise HTTPException(status_code=400, detail="Datasource no soportado")
+    try:
+        user_id = str(
+            payload.get("sub")
+            or payload.get("user_id")
+            or payload.get("email")
+            or "anonymous"
+        )
+        row_count = len(resp.table.rows) if resp.table and resp.table.rows else 0
+        history_store.add(
+            user_id=user_id,
+            question=req.question,
+            datasource=req.datasource.model_dump(),
+            generated=resp.generated,
+            row_count=row_count,
+            answer_text=resp.answer_text,
+        )
+    except Exception as _e:
+        print("WARN: no se pudo guardar historial:", _e)
 
+    return resp
+
+@app.get("/history", response_model=HistoryList)
+def get_history(
+    limit: int = 100,
+    offset: int = 0,
+    payload: dict = Depends(require_jwt),
+    db: Session = Depends(get_db),   # opcional, lo dejo por consistencia
+):
+    user_id = str(
+        payload.get("sub")
+        or payload.get("user_id")
+        or payload.get("email")
+        or "anonymous"
+    )
+    rows = history_store.list(user_id=user_id, limit=limit, offset=offset)
+
+    items = [
+        HistoryItem(
+            id=r["id"],
+            question=r["question"],
+            datasource=r["datasource"],
+            generated=r["generated"],
+            row_count=r["row_count"],
+            created_at=r["created_at"],
+            answer_text=r.get("answer_text", "") or "",
+        )
+        for r in rows
+    ]
+    total = history_store.count(user_id=user_id)
+    return HistoryList(items=items, total=total)
+
+@app.delete("/history")
+def clear_history(
+    payload: dict = Depends(require_jwt),
+    db: Session = Depends(get_db),   # opcional, lo dejo por consistencia
+):
+    user_id = str(
+        payload.get("sub")
+        or payload.get("user_id")
+        or payload.get("email")
+        or "anonymous"
+    )
+    deleted = history_store.clear(user_id=user_id)
+    return {"deleted": deleted}
 
 
 # =========================
