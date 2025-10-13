@@ -1,3 +1,4 @@
+// src/routes.tsx
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 
 import App from './App';
@@ -11,21 +12,22 @@ import { getAuth } from './services/api';
 import AdminConnections from './pages/AdminConnections';
 import FaqPage from "./pages/FaqPage";
 
-function RequireUser({ children }: { children: React.ReactNode }) {
+export function RequireUser({ children }: { children: React.ReactNode }) {
   const { token, role } = getAuth();
   if (!token) return <Navigate to="/login" replace />;
   if (role === "admin") return <Navigate to="/admin" replace />;
   return <>{children}</>;
 }
 
-function RequireAdmin({ children }: { children: React.ReactNode }) {
+export function RequireAdmin({ children }: { children: React.ReactNode }) {
   const { token, role } = getAuth();
   if (!token) return <Navigate to="/login" replace />;
   if (role !== "admin") return <Navigate to="/main" replace />;
   return <>{children}</>;
 }
 
-export const router = createBrowserRouter([
+/** 👉 Exporta este arreglo para los tests (createMemoryRouter) */
+export const routeObjects = [
   {
     path: '/',
     element: <App />,
@@ -37,7 +39,10 @@ export const router = createBrowserRouter([
       { path: 'admin', element: <RequireAdmin><AdminHome /></RequireAdmin> },
       { path: 'admin/users', element: <RequireAdmin><AdminUsers /></RequireAdmin> },
       { path: 'admin/connections', element: <RequireAdmin><AdminConnections /></RequireAdmin> },
-      { path: '/faq', element: <FaqPage />},
+      { path: 'faq', element: <FaqPage /> }, // 👈 sin la barra inicial
     ],
   },
-]);
+];
+
+/** Router real de la app */
+export const router = createBrowserRouter(routeObjects);

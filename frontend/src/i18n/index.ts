@@ -1,7 +1,9 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
-import en from "./en.json";
-import es from "./es.json";
+import enRaw from "./en.json?raw";
+import esRaw from "./es.json?raw";
+const en = JSON.parse(enRaw);
+const es = JSON.parse(esRaw);
 
 const savedLang = localStorage.getItem("lang") || "en";
 
