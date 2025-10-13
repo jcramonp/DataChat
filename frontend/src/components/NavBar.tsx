@@ -2,11 +2,14 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import './NavBar.css';
 import Logo from './Logo';
 import { getAuth, clearAuth } from '../services/api';
+import { useTranslation } from "react-i18next";
+import LanguageSelector from "./LanguageSelector";
 
 export default function NavBar() {
   const { pathname } = useLocation();
   const nav = useNavigate();
   const { token, role } = getAuth();
+  const { t } = useTranslation();
 
   const Tab = ({ to, children }: { to: string; children: React.ReactNode }) => (
     <Link to={to} className={`nav-pill ${pathname === to ? 'active' : ''}`}>
@@ -25,20 +28,22 @@ export default function NavBar() {
         <div className="dc-brand"><Logo size={30} /></div>
 
         <nav className="dc-tabs">
-          <Tab to="/">Home</Tab>
-          {/* usuarios comunes ven Main; admin ve Admin */}
-          {role === 'admin' ? <Tab to="/admin/users">Admin</Tab> : <Tab to="/main">Main</Tab>}
+          <Tab to="/">{t("nav.home")}</Tab>
+          {role === 'admin'
+            ? <Tab to="/admin/users">{t("nav.admin")}</Tab>
+            : <Tab to="/main">{t("nav.main")}</Tab>}
         </nav>
 
-        <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {token ? (
             <>
               <span className="nav-pill" style={{ marginRight: 8 }}>{(role || '').toUpperCase()}</span>
-              <button className="nav-pill" onClick={logout}>Logout</button>
+              <button className="nav-pill" onClick={logout}>{t("nav.logout")}</button>
             </>
           ) : (
-            <Link to="/login" className="nav-pill">Login</Link>
+            <Link to="/login" className="nav-pill">{t("nav.login")}</Link>
           )}
+          <LanguageSelector /> {/* +++ */}
         </div>
       </div>
     </header>
