@@ -1,198 +1,111 @@
-/* HERO */
-.hero {
-  background: radial-gradient(120% 120% at 20% -10%, #f3f1fb 0%, #efe9fb 35%, #e7f0ff 100%);
-  padding: 36px 0 20px;
-  border-bottom: 1px solid #e7e3ef;
+/* ===== Base & tokens ===== */
+:root{
+  --bg:#ffffff;
+  --card:#ffffff;
+  --card-border:#e5e7eb;
+  --muted:#6b7280;
+  --text:#111827;
+  --brand:#6d28d9;
+  --brand-2:#4f46e5;
+  --chip:#f3f4f6;
+  --row:#fcfcfd;
+  --shadow:0 10px 30px rgba(17,24,39,.06);
+  --radius:16px;
+  --radius-sm:12px;
 }
-.hero-title {
-  font-size: 40px;
-  margin: 0 0 8px;
-  color: #2f56ff;
-  font-weight: 900;
-  letter-spacing: 0.2px;
+*{box-sizing:border-box}
+body{background:#fafafa;color:var(--text);font-family:ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial}
+
+/* ===== Layout ===== */
+.container{max-width:980px;margin:0 auto;padding:0 16px}
+
+/* ===== Hero ===== */
+.hero{
+  background:linear-gradient(180deg,#fafaff 0%,#ffffff 65%);
+  padding:36px 0 20px;border-bottom:1px solid #e7e3ef
 }
-.hero-sub {
-  margin: 0 auto 18px;
-  max-width: 720px;
-  color: #5c6077;
-  line-height: 1.6;
+.hero-title{font-size:40px;margin:0 0 8px;color:#111827;font-weight:900;letter-spacing:.2px}
+.hero-sub{margin:0 auto 18px;max-width:720px;color:var(--muted);line-height:1.6}
+.suggestions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.suggestions button{
+  background:#fff;border:1px solid var(--card-border);color:#374151;border-radius:9999px;
+  padding:8px 14px;cursor:pointer;font-size:12px
 }
-.suggestions {
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-.suggestions button {
-  background: #fff;
-  border: 1px solid #ddd;
-  color: #444;
-  border-radius: 22px;
-  padding: 8px 14px;
-  cursor: pointer;
+.suggestions button:hover{background:#f3f4f6}
+
+/* ===== Card genérica ===== */
+.chat-card{
+  background:var(--card);border:1px solid var(--card-border);
+  border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)
 }
 
-/* CHAT */
-.chat-card {
-  background: #fff;
-  border: 1px solid #e7e3ef;
-  border-top: none; /* 🔹 quita el borde superior */
-  border-radius: 0 0 16px 16px; /* 🔹 solo bordes redondeados abajo */
-  padding: 16px;
-  box-shadow: 0 6px 18px rgba(20, 30, 60, 0.06);
-}
+/* ===== Connection header + body ===== */
+.conn-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.conn-header h3{font-size:16px;font-weight:800;margin:0;color:#3b3dd1}
+.conn-body{background:#f9fafb;border:1px solid #eef2f7;border-radius:var(--radius-sm);padding:14px}
+.conn-body.closed{display:none}
 
-.chat-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+/* Toggle */
+.toggle-btn{
+  border:1px solid var(--card-border);background:#f8fafc;border-radius:10px;
+  padding:6px 10px;cursor:pointer;font-weight:600
 }
-.chat-header h3 {
-  margin: 0;
-  font-size: 18px;
-}
-.chat-actions button {
-  border: none;
-  background: #f0ecfb;
-  color: #5a49d6;
-  border-radius: 10px;
-  padding: 6px 10px;
-  cursor: pointer;
-}
+.toggle-btn:hover{background:#eef2f7}
 
-.chat-messages {
-  min-height: 140px;
-  margin-top: 10px;
-  padding: 8px 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
+/* Radios (source selector) */
+.connection-controls{display:flex;gap:12px;margin:10px 0;background:#fff;padding:6px 10px;border-radius:999px;box-shadow:inset 0 0 0 1px #e9e6f6}
+.connection-controls label{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;cursor:pointer;color:#374151;font-weight:600}
+.connection-controls input[type="radio"]{accent-color:#5b76ff}
 
-.msg {
-  padding: 10px 14px;
-  border-radius: 14px;
-  max-width: 75%;
-  line-height: 1.35;
-}
-.msg.user {
-  align-self: flex-end;
-  color: #fff;
-  background: linear-gradient(135deg, #7a8aff, #f18be2);
-}
-.msg.assistant {
-  align-self: flex-start;
-  color: #fff;
-  background: #4b6bff;
-}
+/* Labels y texto pequeño */
+.text-sm{font-size:14px;color:#374151;font-weight:600}
 
-.chat-input {
-  display: flex;
-  gap: 10px;
-  margin-top: 12px;
-  border-top: 1px solid #eee;
-  padding-top: 12px;
+/* Inputs & selects */
+input,select{
+  width:100%;border:1px solid #d1d5db;border-radius:12px;padding:10px 12px;background:#fff;color:#111;
+  -webkit-appearance:none;appearance:none
 }
-.chat-input input {
-  flex: 1;
-  padding: 12px 14px;
-  border-radius: 14px;
-  border: 1px solid #d9d9e3;
-  outline: none;
-}
-.chat-input button {
-  border: none;
-  border-radius: 14px;
-  padding: 12px 18px;
-  color: #fff;
-  font-weight: 700;
-  cursor: pointer;
-  background: linear-gradient(135deg, #4b6bff, #f18be2);
-}
-.error {
-  color: #b00020;
-  margin: 6px 0;
-}
+input:focus,select:focus{border-color:#c3baf7;box-shadow:0 0 0 3px rgba(100,80,200,.15);outline:none}
 
-.connection-controls label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: #111827; /* texto oscuro y visible */
-  font-weight: 600;
-}
+/* Pequeño caret para los selects (opcional) */
+select{background-image:linear-gradient(45deg,transparent 50%,#9ca3af 50%),linear-gradient(135deg,#9ca3af 50%,transparent 50%),linear-gradient(to right,#fff,#fff);
+  background-position:calc(100% - 16px) calc(50% + 2px),calc(100% - 11px) calc(50% + 2px),calc(100% - 2.2rem) 0.6rem;
+  background-size:5px 5px,5px 5px,1px 2.4rem;background-repeat:no-repeat}
 
-.chat-card .text-sm {
-  font-size: 14px;
-  color: #111827; /* labels “JWT”, “Language”, etc. */
-  font-weight: 600;
-}
+/* ===== Tabla preview ===== */
+.border.rounded{border-radius:12px!important;border:1px solid var(--card-border)!important;overflow:hidden;background:#fff}
+table{width:100%;border-collapse:collapse;font-size:14px}
+thead th{background:#f3f4f6;color:#111827;font-weight:700;padding:10px;border-bottom:1px solid var(--card-border)}
+tbody td{padding:10px;border-bottom:1px solid #f1f5f9}
+tbody tr:nth-child(odd){background:var(--row)}
 
-/* Fuerza campos legibles en tema oscuro/claro */
-.chat-card input,
-.chat-card select {
-  background: #fff;
-  color: #111;
-  border: 1px solid #d1d5db;
+/* Paginación (Prev/Next) */
+.pagination{display:flex;align-items:center;gap:8px}
+.pagination .btn{
+  padding:8px 12px;border-radius:10px;border:1px solid var(--card-border);background:#f8fafc;font-weight:600;cursor:pointer
 }
+.pagination .btn:hover{background:#eef2f7}
+.pagination .btn:disabled{opacity:.5;cursor:not-allowed}
 
-/* Radio bonito (opcional) */
-.connection-controls input[type='radio'] {
-  accent-color: #4b6bff;
-}
+/* ===== Chat ===== */
+.chat-header{display:flex;justify-content:space-between;align-items:center}
+.chat-header h3{margin:0;font-size:18px}
+.chat-actions button{border:1px solid #e5e7eb;background:#f8fafc;color:#5a49d6;border-radius:10px;padding:6px 10px;cursor:pointer}
+.chat-actions button:hover{background:#eef2f7}
 
-/* === Connection Card con gradiente y estilo bonito === */
-.chat-card {
-  background: linear-gradient(180deg, #f8f9ff 0%, #f5f0ff 100%) !important;
-  border: 1px solid #ebe7f7 !important;
-  border-radius: 16px !important;
-  padding: 20px !important;
-  box-shadow: 0 10px 30px rgba(100, 80, 200, 0.08) !important;
-}
+.chat-messages{min-height:140px;margin-top:10px;padding:8px 0;display:flex;flex-direction:column;gap:10px}
+.msg{padding:12px;border-radius:12px;max-width:75%;line-height:1.45;border:1px solid #eef2f7;background:#fff}
+.msg.user{border-left:4px solid var(--brand)}
+.msg.assistant{border-left:4px solid #60a5fa}
 
-/* título */
-.chat-card h3 {
-  margin-top: 0;
-  font-weight: 800;
-  font-size: 18px;
-  color: #3b3dd1;
+.chat-input{display:grid;grid-template-columns:1fr auto;gap:10px;margin-top:12px}
+.chat-input input{border:1px solid #d1d5db;border-radius:12px;padding:12px}
+.chat-input button{
+  border:1px solid var(--brand);background:var(--brand);color:#fff;padding:0 16px;border-radius:12px;font-weight:700;cursor:pointer
 }
+.chat-input button:hover{background:#5b21b6;border-color:#5b21b6}
+.chat-input button:disabled{opacity:.6}
 
-/* radios */
-.connection-controls {
-  background: #ffffffa6;
-  padding: 6px 10px;
-  border-radius: 999px;
-  box-shadow: inset 0 0 0 1px #e9e6f6;
-}
-.connection-controls label {
-  font-weight: 600;
-  color: #374151;
-  padding: 4px 8px;
-  border-radius: 999px;
-  cursor: pointer;
-}
-.connection-controls input[type='radio'] {
-  accent-color: #5b76ff;
-}
-
-/* inputs y selects */
-.chat-card input,
-.chat-card select {
-  background: #fff;
-  border: 1px solid #e5e7eb !important;
-  border-radius: 12px !important;
-  padding: 10px 12px !important;
-}
-.chat-card input:focus,
-.chat-card select:focus {
-  outline: none;
-  border-color: #c3baf7 !important;
-  box-shadow: 0 0 0 3px rgba(100, 80, 200, 0.15);
-}
-
-/* hint */
-.chat-card .text-sm {
-  font-size: 13px;
-  color: #6b7280;
-}
+/* Utilidades */
+.mt-16{margin-top:4rem}
+.center{text-align:center}

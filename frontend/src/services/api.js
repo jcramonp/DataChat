@@ -92,3 +92,22 @@ export async function listConnections() {
   if (!res.ok) throw new Error(j?.detail || `Error ${res.status}`);
   return j; // Array<ConnectionOut>
 }
+
+// === US05 - Excel endpoints ===
+export async function listExcelSheets(path) {
+  const r = await fetch(`${API_URL}/excel/sheets?path=${encodeURIComponent(path)}`);
+  if (!r.ok) throw new Error(`No se pudieron listar hojas (${r.status})`);
+  return r.json(); // { path, sheets: [...] }
+}
+
+export async function previewExcel(path, sheetName, offset = 0, limit = 50) {
+  const params = new URLSearchParams({
+    path,
+    sheet_name: String(sheetName ?? 0),
+    offset: String(offset),
+    limit: String(limit),
+  });
+  const r = await fetch(`${API_URL}/excel/preview?${params.toString()}`);
+  if (!r.ok) throw new Error(`No se pudo previsualizar la hoja (${r.status})`);
+  return r.json(); // { sheet, columns, rows, page }
+}
