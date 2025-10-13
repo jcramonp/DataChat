@@ -4,6 +4,7 @@ import type { ChatResponse } from '../services/api';
 import './MainPage.css';
 import DataTable from '../components/DataTable';
 import { useAuth } from '../auth/AuthContext';
+import ConnectionCard from "../components/ConnectionCard";
 import { Link } from 'react-router-dom';
 import { useTranslation } from "react-i18next";
 
@@ -167,166 +168,61 @@ export default function MainPage() {
 
       {/* PANEL DE CONEXIÓN */}
       <section className="container mt-16">
-        <div className="chat-card" style={{ borderTop: '1px solid #e7e3ef', borderRadius: 16 }}>
-          <div className="conn-header">
-            <h3 style={{ marginTop: 0 }}>{t("main.connection.title")}</h3>
-            <button
-              type="button"
-              className="toggle-btn"
-              onClick={() => setShowConn(s => !s)}
-              aria-expanded={showConn}
-              aria-controls="conn-body"
-              title={showConn ? t("common.hide") : t("common.show")}
-            >
-              {showConn ? t("common.hide") : t("common.show")}
-            </button>
-          </div>
+        <ConnectionCard
+          // UI
+          title={t("main.connection.title")}
+          show={showConn}
+          onToggle={() => setShowConn(s => !s)}
 
-          <div id="conn-body" className={`conn-body ${showConn ? 'open' : 'closed'}`} aria-hidden={!showConn}>
-            {/* Tipo de fuente */}
-            <div className="connection-controls" style={{ display: 'flex', gap: 12, margin: '10px 0' }}>
-              <label>
-                <input
-                  value={sqlUrl}
-                  onChange={e => setSqlUrl(e.target.value)}
-                  placeholder={t("main.mysql.placeholder")}
-                />
+          // Sesión / Idioma
+          signedText={
+            auth?.token
+              ? t("session.signedIn", { role: (auth.role?.toUpperCase() || "USER") })
+              : t("session.signedOut")
+          }
+          langLabel={t("language")}
+          lang={lang}
+          onLangChange={(lng) => setLang(lng)}
 
-                <input
-                  value={excelPath}
-                  onChange={e => setExcelPath(e.target.value)}
-                  placeholder={t("main.excel.placeholder")}
-                />
+          // Fuente
+          source={source}
+          onSourceChange={(s) => {
+            // Mantén tu lógica actual (Excel preview effects ya dependen de 'source')
+            setSource(s);
+          }}
 
-                <input
-                  value={String(connectionId)}
-                  onChange={e => setConnectionId(e.target.value === '' ? '' : Number(e.target.value))}
-                  placeholder={t("main.saved.placeholder")}
-                />
-                {t("main.labels.savedAdmin")}
-              </label>
-            </div>
+          // MySQL
+          sqlalchemyLabel={t("main.labels.sqlalchemyUrl")}
+          sqlalchemyPlaceholder={t("main.mysql.placeholder")}
+          sqlUrl={sqlUrl}
+          onSqlUrlChange={setSqlUrl}
 
-            {/* Config común */}
-            <div style={{ display: 'grid', gap: 10 }}>
-              <div className="text-sm" style={{ color: '#6b7280' }}>
-                {auth?.token
-                  ? t("session.signedIn", { role: (auth.role?.toUpperCase() || 'USER') })
-                  : t("session.signedOut")}
-              </div>
+          // Excel
+          excelPathLabel={t("main.labels.excelPath")}
+          excelPathPlaceholder={t("main.excel.placeholder")}
+          excelPath={excelPath}
+          onExcelPathChange={setExcelPath}
+          sheetLabel={t("main.labels.sheet")}
+          rowsLabel={t("main.labels.rows")}
+          sheets={sheets}
+          sheetName={sheetName}
+          onSheetNameChange={(v) => {
+            setOffset(0);
+            setSheetName(v);
+          }}
+          preview={preview}
 
-              <label className="text-sm">
-                {t("language")}
-                <select
-                  value={lang}
-                  onChange={e => setLang(e.target.value as 'es' | 'en')}
-                  style={{
-                    width: '100%',
-                    padding: 10,
-                    borderRadius: 10,
-                    border: '1px solid #d9d9e3',
-                    marginTop: 6,
-                  }}
-                >
-                  <option value="es">Español</option>
-                  <option value="en">English</option>
-                </select>
-              </label>
+          // Saved/Admin
+          connectionIdLabel={t("main.labels.connectionId")}
+          connectionId={connectionId}
+          onConnectionIdChange={setConnectionId}
 
-              {source === 'mysql' && (
-                <label className="text-sm">
-                  {t("main.labels.sqlalchemyUrl")}
-                  <input
-                    value={sqlUrl}
-                    onChange={e => setSqlUrl(e.target.value)}
-                    placeholder={t("main.mysql.placeholder")}
-                    style={{
-                      width: '100%',
-                      padding: 10,
-                      borderRadius: 10,
-                      border: '1px solid #d9d9e3',
-                      marginTop: 6,
-                    }}
-                  />
-                </label>
-              )}
-
-              {/* Excel */}
-              {source === 'excel' && (
-                <>
-                  <label className="text-sm">
-                    {t("main.labels.excelPath")}
-                    <input
-                      value={excelPath}
-                      onChange={e => setExcelPath(e.target.value)}
-                      placeholder={t("main.excel.placeholder")}
-                      style={{
-                        width: '100%',
-                        padding: 10,
-                        borderRadius: 10,
-                        border: '1px solid #d9d9e3',
-                        marginTop: 6,
-                      }}
-                    />
-                  </label>
-
-                  {/* Selector de hoja */}
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <label className="text-sm">{t("main.labels.sheet")}</label>
-                      <select
-                        className="border rounded px-2 py-1"
-                        value={String(sheetName ?? '')}
-                        onChange={e => {
-                          setOffset(0);
-                          setSheetName(e.target.value);
-                        }}
-                      >
-                        {sheets.map(n => (
-                          <option key={n} value={n}>
-                            {n}
-                          </option>
-                        ))}
-                      </select>
-                      <span className="text-xs opacity-70">
-                        {preview ? `${preview.total} ${t("main.labels.rows")}` : ''}
-                      </span>
-                    </div>
-
-                    {/* Vista previa */}
-                    {preview && preview.rows.length > 0 && (
-                      <div className="border rounded">
-                        <DataTable columns={preview.columns} rows={preview.rows} defaultPageSize={10} />
-                      </div>
-                    )}
-
-                  </div>
-                </>
-              )}
-
-              {source === 'saved' && (
-                <label className="text-sm">
-                  {t("main.labels.connectionId")}
-                  <input
-                    value={String(connectionId)}
-                    onChange={e =>
-                      setConnectionId(e.target.value === '' ? '' : Number(e.target.value))
-                    }
-                    placeholder="1"
-                    style={{
-                      width: '100%',
-                      padding: 10,
-                      borderRadius: 10,
-                      border: '1px solid #d9d9e3',
-                      marginTop: 6,
-                    }}
-                  />
-                </label>
-              )}
-            </div>
-          </div>
-        </div>
+          // Textos accesibilidad
+          showText={t("common.show")}
+          hideText={t("common.hide")}
+        />
       </section>
+
 
       {/* CHAT */}
       <section className="container mt-16">
