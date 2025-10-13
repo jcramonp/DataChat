@@ -42,6 +42,15 @@
     "missingExcelPath": "Debes indicar la ruta del Excel en el servidor.",
     "invalidConnectionId": "Debes indicar un Connection ID válido (número)."
   },
+  "connection": {
+    "source": "Origen de datos",
+    "sourceAria": "Selecciona el origen de datos",
+    "sources": {
+      "mysql": "MySQL",
+      "excel": "Excel",
+      "admin": "BD Admin"
+    }
+  },
   "main": {
     "connection": { "title": "Conexión" },
     "labels": {
@@ -49,10 +58,11 @@
       "excelPath": "Ruta de Excel (visible para el servidor)",
       "sheet": "Hoja:",
       "rows": "filas",
-      "connectionId": "Connection ID",
+      "connectionId": "ID de conexión",
       "savedAdmin": "Guardada (admin)"
     },
     "chat": {
+      "title": "Asistente de DataChat",
       "placeholder": "Pregúntame lo que quieras de tus datos…",
       "send": "Enviar",
       "sending": "Enviando…",
@@ -67,35 +77,35 @@
       "q3": "¿Qué clientes tienen más pedidos?"
     }
   },
-    "nav2": { "faq": "Preguntas frecuentes" },
-    "faq": {
-        "title": "Preguntas frecuentes",
-        "intro": "Respuestas rápidas a las preguntas más comunes sobre DataChat.",
-        "items": [
-        {
-            "q": "Veo “No autorizado (JWT inválido)”. ¿Qué hago?",
-            "a": "Tu sesión expiró. Cierra sesión e inicia nuevamente desde la página de Login."
-        },
-        {
-            "q": "¿Cómo me conecto a MySQL?",
-            "a": "Abre el panel de Conexión, elige MySQL y pega una URL de SQLAlchemy válida (ej.: mysql+pymysql://usuario:clave@host:3306/db)."
-        },
-        {
-            "q": "¿Cómo consulto un archivo de Excel?",
-            "a": "Elige Excel, ingresa la ruta visible para el servidor (ej.: C:/data/empleados.xlsx), selecciona la hoja y haz tu pregunta."
-        },
-        {
-            "q": "¿Por qué sale “Error consultando el backend”?",
-            "a": "Puede que la API no esté levantada o CORS la bloquee. Asegura que FastAPI esté corriendo y CORS permita http://localhost:5173."
-        },
-        {
-            "q": "¿Cómo cambio el idioma de la app?",
-            "a": "Usa el selector de idioma en la barra superior o en el panel de Conexión. Tu elección se guarda automáticamente."
-        },
-        {
-            "q": "¿Cuántas filas se devuelven?",
-            "a": "Por defecto limitamos resultados (ej.: max_rows: 200). Puedes ajustar este valor en las opciones de la solicitud."
-        }
-        ]
-    }
+  "nav2": { "faq": "Preguntas frecuentes" },
+  "faq": {
+    "title": "Preguntas frecuentes",
+    "intro": "Respuestas rápidas a las preguntas más comunes sobre DataChat.",
+    "items": [
+      {
+        "q": "Veo “No autorizado (JWT inválido)”. ¿Qué hago?",
+        "a": "Tu sesión expiró. Cierra sesión e inicia nuevamente desde la página de Login."
+      },
+      {
+        "q": "¿Cómo me conecto a MySQL?",
+        "a": "Abre el panel de Conexión, elige MySQL y pega una URL de SQLAlchemy válida (ej.: mysql+pymysql://usuario:clave@host:3306/db)."
+      },
+      {
+        "q": "¿Cómo consulto un archivo de Excel?",
+        "a": "Elige Excel, ingresa la ruta visible para el servidor (ej.: C:/data/empleados.xlsx), selecciona la hoja y haz tu pregunta."
+      },
+      {
+        "q": "¿Por qué sale “Error consultando el backend”?",
+        "a": "Puede que la API no esté levantada o CORS la bloquee. Asegura que FastAPI esté corriendo y CORS permita http://localhost:5173."
+      },
+      {
+        "q": "¿Cómo cambio el idioma de la app?",
+        "a": "Usa el selector de idioma en la barra superior o en el panel de Conexión. Tu elección se guarda automáticamente."
+      },
+      {
+        "q": "¿Cuántas filas se devuelven?",
+        "a": "Por defecto limitamos resultados (ej.: max_rows: 200). Puedes ajustar este valor en las opciones de la solicitud."
+      }
+    ]
+  }
 }

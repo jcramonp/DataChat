@@ -17,7 +17,14 @@ type Props = {
   lang: "es" | "en";
   onLangChange: (lang: "es" | "en") => void;
 
-  // Fuente de datos
+  // Fuente de datos (labels i18n)
+  sourceLabel: string;         // e.g., t("connection.source")
+  sourceAriaLabel: string;     // e.g., t("connection.sourceAria")
+  mysqlLabel: string;          // e.g., t("connection.sources.mysql")
+  excelLabel: string;          // e.g., t("connection.sources.excel")
+  savedLabel: string;          // e.g., t("connection.sources.admin")
+
+  // Estado de fuente
   source: SourceType;
   onSourceChange: (s: SourceType) => void;
 
@@ -53,6 +60,7 @@ export default function ConnectionCard(props: Props) {
   const {
     title, show, onToggle,
     signedText, langLabel, lang, onLangChange,
+    sourceLabel, sourceAriaLabel, mysqlLabel, excelLabel, savedLabel,
     source, onSourceChange,
     sqlalchemyLabel, sqlalchemyPlaceholder, sqlUrl, onSqlUrlChange,
     excelPathLabel, excelPathPlaceholder, excelPath, onExcelPathChange,
@@ -82,11 +90,11 @@ export default function ConnectionCard(props: Props) {
           <div className="connection-form">
             {/* Selector visual (segmented control) */}
             <div className="form-group">
-              <label>Origen de datos</label>
+              <label>{sourceLabel}</label>
               <div
                 className="segmented"
                 role="tablist"
-                aria-label="Selecciona el origen de datos"
+                aria-label={sourceAriaLabel}
               >
                 <button
                   type="button"
@@ -95,7 +103,7 @@ export default function ConnectionCard(props: Props) {
                   className={`seg-btn ${source === "mysql" ? "active" : ""}`}
                   onClick={() => onSourceChange("mysql")}
                 >
-                  MySQL
+                  {mysqlLabel}
                 </button>
                 <button
                   type="button"
@@ -104,7 +112,7 @@ export default function ConnectionCard(props: Props) {
                   className={`seg-btn ${source === "excel" ? "active" : ""}`}
                   onClick={() => onSourceChange("excel")}
                 >
-                  Excel
+                  {excelLabel}
                 </button>
                 <button
                   type="button"
@@ -113,7 +121,7 @@ export default function ConnectionCard(props: Props) {
                   className={`seg-btn ${source === "saved" ? "active" : ""}`}
                   onClick={() => onSourceChange("saved")}
                 >
-                  Admin DB
+                  {savedLabel}
                 </button>
               </div>
             </div>

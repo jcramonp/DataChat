@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { askData, listExcelSheets, previewExcel } from '../services/api';
 import type { ChatResponse } from '../services/api';
 import './MainPage.css';
-import DataTable from '../components/DataTable';
 import { useAuth } from '../auth/AuthContext';
 import ConnectionCard from "../components/ConnectionCard";
 import { Link } from 'react-router-dom';
@@ -19,7 +18,7 @@ type SourceType = 'mysql' | 'excel' | 'saved';
 
 export default function MainPage() {
   const { auth } = useAuth();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   // Chat
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -29,7 +28,7 @@ export default function MainPage() {
 
   // Panel conexión
   const [showConn, setShowConn] = useState(false);
-  const [lang, setLang] = useState<'es' | 'en'>('es');
+  const [lang, setLang] = useState<'es' | 'en'>((i18n.resolvedLanguage as 'es' | 'en') ?? 'es');
   const [source, setSource] = useState<SourceType>('mysql');
 
   // MySQL
@@ -49,6 +48,13 @@ export default function MainPage() {
   const [connectionId, setConnectionId] = useState<number | ''>('');
 
   const pushMessage = (m: Msg) => setMessages(prev => [...prev, m]);
+
+  // Mantener sincronizado el idioma de i18next con el estado local
+  useEffect(() => {
+    const next = (i18n.resolvedLanguage as 'es' | 'en') ?? 'es';
+    if (next !== lang) setLang(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [i18n.resolvedLanguage]);
 
   //  US05: Cargar hojas Excel
   useEffect(() => {
@@ -143,15 +149,13 @@ export default function MainPage() {
   };
 
   // Render
-  return(
+  return (
     <>
       {/* HERO */}
       <section className="hero">
         <div className="container center">
           <h1 className="hero-title">{t("landing.title")}</h1>
-          <p className="hero-sub">
-            {t("landing.subtitle")}
-          </p>
+          <p className="hero-sub">{t("landing.subtitle")}</p>
           <div className="suggestions">
             {[
               t("main.suggestions.q1"),
@@ -173,6 +177,8 @@ export default function MainPage() {
           title={t("main.connection.title")}
           show={showConn}
           onToggle={() => setShowConn(s => !s)}
+          showText={t("common.show")}
+          hideText={t("common.hide")}
 
           // Sesión / Idioma
           signedText={
@@ -182,14 +188,18 @@ export default function MainPage() {
           }
           langLabel={t("language")}
           lang={lang}
-          onLangChange={(lng) => setLang(lng)}
+          onLangChange={(next) => { setLang(next); i18n.changeLanguage(next); }}
 
-          // Fuente
+          // Fuente: labels traducidos
+          sourceLabel={t("connection.source")}
+          sourceAriaLabel={t("connection.sourceAria")}
+          mysqlLabel={t("connection.sources.mysql")}
+          excelLabel={t("connection.sources.excel")}
+          savedLabel={t("connection.sources.admin")}
+
+          // Fuente: estado y handlers
           source={source}
-          onSourceChange={(s) => {
-            // Mantén tu lógica actual (Excel preview effects ya dependen de 'source')
-            setSource(s);
-          }}
+          onSourceChange={(s) => setSource(s)}
 
           // MySQL
           sqlalchemyLabel={t("main.labels.sqlalchemyUrl")}
@@ -216,19 +226,14 @@ export default function MainPage() {
           connectionIdLabel={t("main.labels.connectionId")}
           connectionId={connectionId}
           onConnectionIdChange={setConnectionId}
-
-          // Textos accesibilidad
-          showText={t("common.show")}
-          hideText={t("common.hide")}
         />
       </section>
-
 
       {/* CHAT */}
       <section className="container mt-16">
         <div className="chat-card">
           <div className="chat-header">
-            <h3>DataChat Assistant</h3>
+            <h3>{t("main.chat.title", "DataChat Assistant")}</h3>
             <div className="chat-actions">
               <button type="button" title={t("common.newChat")} onClick={() => setMessages([])}>
                 ＋

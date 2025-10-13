@@ -42,6 +42,15 @@
     "missingExcelPath": "You must provide the Excel path on the server.",
     "invalidConnectionId": "You must provide a valid numeric Connection ID."
   },
+  "connection": {
+    "source": "Data source",
+    "sourceAria": "Select the data source",
+    "sources": {
+      "mysql": "MySQL",
+      "excel": "Excel",
+      "admin": "Admin DB"
+    }
+  },
   "main": {
     "connection": { "title": "Connection" },
     "labels": {
@@ -56,7 +65,8 @@
       "placeholder": "Ask me anything about your data…",
       "send": "Send",
       "sending": "Sending…",
-      "thinking": "DataChat is thinking…"
+      "thinking": "DataChat is thinking…",
+      "title": "DataChat Assistant"
     },
     "mysql": { "placeholder": "mysql+pymysql://user:pass@host:3306/db" },
     "excel": { "placeholder": "C:/data/employees.xlsx" },
@@ -99,4 +109,3 @@
     ]
   }
 }
-
