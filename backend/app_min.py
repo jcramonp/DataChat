@@ -1,11 +1,9 @@
 from __future__ import annotations
-
-import os, json, re, unicodedata, sqlite3
+import os, json, re, sqlite3
 from typing import Any, Dict, List, Optional, Tuple, Literal, Union, Annotated
 from datetime import datetime, timedelta, timezone
-from uuid import uuid4  # 👈 necesario para jti
 
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
@@ -22,13 +20,126 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.sql import func
 from sqlalchemy.engine import Engine
 
+from cryptography.fernet import Fernet, InvalidToken
+
 import pandas as pd
 from dotenv import load_dotenv
 from passlib.context import CryptContext
 
-from fastapi import Query
-import openpyxl
 
+
+# ========= HistoryStore (inlined) =========
+class HistoryStore:
+    def __init__(self, db_path: str = "./backend/history.db") -> None:
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        self.db_path = db_path
+        self._ensure_schema()
+
+    def _conn(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def _ensure_schema(self) -> None:
+        with self._conn() as cx:
+            # tabla base (si no existe)
+            cx.execute(
+                """
+                CREATE TABLE IF NOT EXISTS query_history (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  user_id TEXT NOT NULL,
+                  question TEXT NOT NULL,
+                  datasource_json TEXT NOT NULL,
+                  generated_type TEXT NOT NULL,
+                  generated_code TEXT NOT NULL,
+                  row_count INTEGER NOT NULL,
+                  created_at TEXT NOT NULL
+                )
+                """
+            )
+            # 👇 migración suave: agregar answer_text si falta
+            cols = [r["name"] for r in cx.execute("PRAGMA table_info(query_history)")]
+            if "answer_text" not in cols:
+                cx.execute("ALTER TABLE query_history ADD COLUMN answer_text TEXT NOT NULL DEFAULT ''")
+
+    def add(
+        self,
+        *,
+        user_id: str,
+        question: str,
+        datasource: Dict[str, Any],
+        generated: Dict[str, Any],
+        row_count: int,
+        answer_text: str = "",
+        created_at: Optional[str] = None,
+    ) -> int:
+        if created_at is None:
+            created_at = datetime.now(timezone.utc).isoformat()
+        with self._conn() as cx:
+            cur = cx.execute(
+                """
+                INSERT INTO query_history
+                  (user_id, question, datasource_json, generated_type, generated_code, row_count, created_at, answer_text)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    user_id,
+                    question,
+                    json.dumps(datasource, ensure_ascii=False),
+                    str(generated.get("type", "")),
+                    str(generated.get("code", "")),
+                    int(row_count),
+                    created_at,
+                    answer_text or "",
+                ),
+            )
+            return int(cur.lastrowid)
+
+    def list(
+        self, *, user_id: str, limit: int = 100, offset: int = 0
+    ) -> List[Dict[str, Any]]:
+        with self._conn() as cx:
+            rows = cx.execute(
+                """
+                SELECT id, user_id, question, datasource_json, generated_type, generated_code, row_count, created_at, answer_text
+                FROM query_history
+                WHERE user_id = ?
+                ORDER BY datetime(created_at) DESC
+                LIMIT ? OFFSET ?
+                """,
+                (user_id, limit, offset),
+            ).fetchall()
+            out: List[Dict[str, Any]] = []
+            for r in rows:
+                out.append(
+                    {
+                        "id": r["id"],
+                        "user_id": r["user_id"],
+                        "question": r["question"],
+                        "datasource": json.loads(r["datasource_json"]),
+                        "generated": {
+                            "type": r["generated_type"],
+                            "code": r["generated_code"],
+                        },
+                        "row_count": r["row_count"],
+                        "created_at": r["created_at"],
+                        "answer_text": r["answer_text"],
+                    }
+                )
+            return out
+
+    def clear(self, *, user_id: str) -> int:
+        with self._conn() as cx:
+            cur = cx.execute("DELETE FROM query_history WHERE user_id = ?", (user_id,))
+            return int(cur.rowcount)
+
+    # (si ya agregaste count() antes)
+    def count(self, *, user_id: str) -> int:
+        with self._conn() as cx:
+            row = cx.execute(
+                "SELECT COUNT(*) AS c FROM query_history WHERE user_id = ?", (user_id,)
+            ).fetchone()
+            return int(row["c"]) if row else 0
 
 # ========= Env & App =========
 load_dotenv()
@@ -42,51 +153,35 @@ app.add_middleware(
 )
 
 # ========= Seguridad / JWT =========
-JWT_SECRET = os.getenv("JWT_SECRET", "dev")
+JWT_SECRET = os.getenv("JWT_SECRET", "dev")     # cámbialo en prod
 JWT_ALG = "HS256"
 JWT_EXPIRE_MINUTES = 120
 
+# Usa Argon2 (evita líos de bcrypt en Windows)
 pwd_ctx = CryptContext(schemes=["argon2"], deprecated="auto")
+
 auth_scheme = HTTPBearer(auto_error=True)
 
-class SessionOut(BaseModel):
-    jti: str
-    sub: str
-    role: str
-    issued_at: int
-    expires_at: int
-    last_seen: int
-    revoked: bool = False
+# ========= Persistencia de usuarios (SQLite) =========
+DB_URL = os.getenv("AUTH_DB_URL", "sqlite:///./auth.db")
 
-SESSIONS: dict[str, SessionOut] = {}
+history_store = HistoryStore("./backend/history.db")
 
 def require_jwt(credentials: HTTPAuthorizationCredentials = Depends(auth_scheme)) -> dict:
     token = credentials.credentials
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expirado")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Token inválido")
-
-    jti = payload.get("jti")
-    s = SESSIONS.get(jti)
-    if not s or s.revoked:
-        raise HTTPException(status_code=401, detail="Sesión inválida o revocada")
-
-    s.last_seen = int(datetime.now(tz=timezone.utc).timestamp())
-    SESSIONS[jti] = s
-    return payload
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expirado")
+    except (jwt.InvalidTokenError, PyJWTError) as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Token inválido: {e}")
 
 def create_jwt(sub: str, role: str, extra: dict | None = None) -> str:
-    now = int(datetime.now(tz=timezone.utc).timestamp())
-    exp = int((datetime.now(tz=timezone.utc) + timedelta(minutes=JWT_EXPIRE_MINUTES)).timestamp())
     payload = {
         "sub": sub,
         "role": role,
-        "iat": now,
-        "exp": exp,
-        "jti": str(uuid4()),
+        "iat": int(datetime.now(tz=timezone.utc).timestamp()),
+        "exp": int((datetime.now(tz=timezone.utc) + timedelta(minutes=JWT_EXPIRE_MINUTES)).timestamp()),
     }
     if extra:
         payload.update(extra)
@@ -101,7 +196,6 @@ def require_roles(roles: list[str]):
             raise HTTPException(status_code=403, detail="Forbidden: insufficient role")
         return user
     return _dep
-
 
 # ========= Persistencia de usuarios (SQLite) =========
 DB_URL = os.getenv("AUTH_DB_URL", "sqlite:///./auth.db")
@@ -126,6 +220,7 @@ class Connection(Base):
     created_by = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+
 Base.metadata.create_all(bind=engine)
 
 def get_db():
@@ -136,6 +231,7 @@ def get_db():
         db.close()
 
 def seed_admin():
+    """Crea el admin por defecto si no existe."""
     db = SessionLocal()
     try:
         email = "admin@datac.chat"
@@ -171,31 +267,17 @@ class ConnectionOut(BaseModel):
     db_type: str
     sqlalchemy_url: str
     is_active: bool
-    class Config:
-        from_attributes = True   # Pydantic v2: si prefieres, usa: model_config = ConfigDict(from_attributes=True)
 
-# ========= Endpoints de AUTH =========
+    class Config:
+        from_attributes = True
+
 @app.post("/auth/login")
 def auth_login(req: LoginRequest, db: Session = Depends(get_db)):
     email = req.email.lower().strip()
     u = db.get(User, email)
     if not u or not u.is_active or not pwd_ctx.verify(req.password, u.password_hash):
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
-
-    token = create_jwt(sub=email, role=u.role)
-
-    payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
-    jti = payload["jti"]
-    now = payload["iat"]
-    SESSIONS[jti] = SessionOut(
-        jti=jti,
-        sub=payload["sub"],
-        role=payload["role"],
-        issued_at=payload["iat"],
-        expires_at=payload["exp"],
-        last_seen=now,
-        revoked=False,
-    )
+    token = create_jwt(sub=u.email, role=u.role)
     return {"access_token": token, "token_type": "bearer", "role": u.role}
 
 @app.post("/auth/register")
@@ -211,16 +293,24 @@ def auth_register(req: RegisterRequest, _: dict = Depends(require_roles(["admin"
 def auth_me(user=Depends(get_current_user)):
     return user
 
-@app.post("/auth/logout")
-def auth_logout(payload: dict = Depends(require_jwt)):
-    jti = payload.get("jti")
-    s = SESSIONS.get(jti)
-    if s:
-        s.revoked = True
-        SESSIONS[jti] = s
-    return {"ok": True}
+@app.get("/admin/ping")
+def admin_ping(_: dict = Depends(require_roles(["admin"]))):
+    return {"ok": True, "msg": "pong (admin)"}
 
-# ========= Endpoints de Conexiones (ADMIN) =========
+# =========================
+# Endpoints de Conexiones (admin)
+# =========================
+
+def _validate_connection(sqlalchemy_url: str) -> None:
+    """Levanta si no conecta / no se puede ejecutar SELECT 1."""
+    eng = _make_engine(sqlalchemy_url)
+    try:
+        with eng.connect() as c:
+            c.execute(text("SELECT 1"))
+    finally:
+        eng.dispose()
+
+
 @app.post("/admin/connections", response_model=ConnectionOut)
 def admin_create_connection(
     req: CreateConnectionRequest,
@@ -229,12 +319,15 @@ def admin_create_connection(
 ):
     if _dialect_from_url(req.sqlalchemy_url) != req.db_type:
         raise HTTPException(status_code=400, detail="db_type no coincide con la URL")
+
     try:
         _validate_connection(req.sqlalchemy_url)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"No se pudo conectar: {e}")
+
     if db.query(Connection).filter_by(name=req.name).first():
         raise HTTPException(status_code=400, detail="Ya existe una conexión con ese nombre")
+
     conn = Connection(
         name=req.name,
         db_type=req.db_type,
@@ -245,22 +338,16 @@ def admin_create_connection(
     db.add(conn); db.commit(); db.refresh(conn)
     return conn
 
+
 @app.get("/admin/connections", response_model=list[ConnectionOut])
 def admin_list_connections(_: dict = Depends(require_roles(["admin"])), db: Session = Depends(get_db)):
     return db.query(Connection).order_by(Connection.id.desc()).all()
 
-@app.get("/admin/sessions", response_model=list[SessionOut])
-def admin_list_sessions(_: dict = Depends(require_roles(["admin"]))):
-    return list(SESSIONS.values())
+print("[boot] app_min desde:", __file__)
+print("[exec_pandas] v2 cargada (sin locals())")
 
-@app.delete("/admin/sessions/{jti}")
-def admin_revoke_session(jti: str, _: dict = Depends(require_roles(["admin"]))):
-    s = SESSIONS.get(jti)
-    if not s:
-        raise HTTPException(status_code=404, detail="Sesión no encontrada")
-    s.revoked = True
-    SESSIONS[jti] = s
-    return {"ok": True, "jti": jti}
+import json, re, unicodedata
+
 
 def _unwrap_code_block(s: str) -> str:
     s = s.strip()
@@ -1190,6 +1277,7 @@ def answer_excel(question: str, source: ExcelSource, opts: ChatOptions) -> ChatR
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest, payload: dict = Depends(require_jwt), db: Session = Depends(get_db)):
+    # ❌ los admins no usan el chatbot
     if str(payload.get("role", "")).lower() == "admin":
         raise HTTPException(status_code=403, detail="Admins no pueden usar el chatbot")
 
@@ -1292,47 +1380,3 @@ if __name__ == "__main__":
         print(
             "Crea ./empleados.csv con columnas: genero,salario,departamento … para la prueba rápida."
         )
-
-@app.get("/excel/sheets")
-def list_excel_sheets(path: str = Query(..., description="Ruta del archivo .xlsx accesible para el servidor")):
-    path_l = path.lower()
-    if not (path_l.endswith(".xlsx") or path_l.endswith(".xls")):
-        raise HTTPException(status_code=400, detail="Solo se listan hojas para archivos Excel (.xlsx/.xls)")
-
-    try:
-        wb = openpyxl.load_workbook(path, read_only=True)
-        names = wb.sheetnames
-        return {"path": path, "sheets": names}
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Archivo no encontrado: {path}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"No se pudieron listar hojas: {e}")
-    
-@app.get("/excel/preview")
-def preview_excel(
-    path: str,
-    sheet_name: str | int | None = 0,
-    offset: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=500),
-):
-    try:
-        # lee solo la porción necesaria
-        # estrategia simple: leer toda la hoja y paginar en memoria (MVP)
-        df = pd.read_excel(path, sheet_name=sheet_name)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Archivo no encontrado: {path}")
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Hoja inválida: {e}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error leyendo Excel: {e}")
-
-    total = len(df)
-    cols = list(df.columns)
-    rows = df.iloc[offset: offset + limit].fillna("").values.tolist()
-
-    return {
-        "sheet": {"name": str(sheet_name)},
-        "columns": cols,
-        "rows": rows,
-        "page": {"offset": offset, "limit": limit, "total": int(total)},
-    }
