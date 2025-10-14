@@ -28,7 +28,8 @@
     "hide": "Hide",
     "viewQuery": "View query",
     "copy": "Copy",
-    "newChat": "New Chat"
+    "newChat": "New Chat",
+    "loading": "Loading…"
   },
   "errors": {
     "backend": "Error contacting the backend.",
@@ -49,6 +50,23 @@
       "mysql": "MySQL",
       "excel": "Excel",
       "admin": "Admin DB"
+    }
+  },
+  "history": {
+    "title": "Query History",
+    "clear": "Clear history",
+    "empty": "No queries yet.",
+    "rows": "rows",
+    "viewAnswer": "View answer",
+    "hideAnswer": "Hide answer",
+    "notSaved": "Answer not saved in this item.",
+    "generatedCode": "Generated code",
+    "noContent": "No content",
+    "datasource": "Datasource",
+    "errors": {
+      "tokenExpired": "Session expired. Please log in again.",
+      "loadGeneric": "Could not load history. Try again.",
+      "clearGeneric": "Could not clear history. Try again."
     }
   },
   "main": {

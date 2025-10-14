@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { fetchHistory, clearHistory } from "../services/history";
 import type { HistoryItem } from "../services/history";
 
@@ -8,19 +9,31 @@ type Props = {
 };
 
 const History: React.FC<Props> = ({ apiBase, token }) => {
+  const { t, i18n } = useTranslation();
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState<string | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
 
-    const load = async () => {
+  const mapError = (e: any, scope: "load" | "clear") => {
+    const status = e?.status ?? e?.response?.status;
+    const msg = String(e?.message ?? "");
+    if (status === 401 || /token\s*(expirado|expired)/i.test(msg)) {
+      return t("history.errors.tokenExpired");
+    }
+    return scope === "load"
+      ? t("history.errors.loadGeneric")
+      : t("history.errors.clearGeneric");
+  };
+
+  const load = async () => {
     try {
       setLoading(true);
       setError(null);
       const data = await fetchHistory(apiBase, token);
       setItems(data);
     } catch (e: any) {
-      setError(e?.message || 'Error cargando historial');
+      setError(mapError(e, "load"));
     } finally {
       setLoading(false);
     }
@@ -33,30 +46,29 @@ const History: React.FC<Props> = ({ apiBase, token }) => {
       await clearHistory(apiBase, token);
       setItems([]);
     } catch (e: any) {
-      setError(e?.message || 'Error limpiando historial');
+      setError(mapError(e, "clear"));
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, [token]);
-
+  useEffect(() => { load(); }, [token, i18n.language]);
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">Query History</h1>
+        <h1 className="text-2xl font-bold">{t("history.title")}</h1>
         <button
           onClick={onClear}
           className="px-3 py-2 rounded bg-red-600 text-white hover:opacity-90"
         >
-          Limpiar historial
+          {t("history.clear")}
         </button>
       </div>
 
-      {loading && <div>Cargando…</div>}
+      {loading && <div>{t("common.loading")}</div>}
       {error && <div className="text-red-600">{error}</div>}
-      {!loading && items.length === 0 && <div>No hay consultas aún.</div>}
+      {!loading && items.length === 0 && <div>{t("history.empty")}</div>}
 
       <div className="space-y-3">
         {items.map((it) => (
@@ -72,7 +84,9 @@ const History: React.FC<Props> = ({ apiBase, token }) => {
                 <span className="px-2 py-1 rounded bg-gray-100 mr-2">
                   {it.generated?.type ? it.generated.type.toUpperCase() : "CHAT"}
                 </span>
-                <span className="text-gray-600">{it.row_count} filas</span>
+                <span className="text-gray-600">
+                  {it.row_count} {t("history.rows")}
+                </span>
               </div>
             </div>
 
@@ -81,19 +95,21 @@ const History: React.FC<Props> = ({ apiBase, token }) => {
                 className="text-blue-700 underline"
                 onClick={() => setExpanded((prev) => (prev === it.id ? null : it.id))}
               >
-                {expanded === it.id ? "Ocultar respuesta" : "Ver respuesta"}
+                {expanded === it.id ? t("history.hideAnswer") : t("history.viewAnswer")}
               </button>
               {expanded === it.id && (
                 <pre className="mt-2 text-sm overflow-auto bg-gray-50 p-3 rounded whitespace-pre-wrap">
 {(it.answer_text && it.answer_text.trim()) 
   ? it.answer_text 
-  : (it.generated?.code ? `Respuesta no guardada en este item.\n[Legacy] Código generado:\n${it.generated.code}` : "Sin contenido")}
+  : (it.generated?.code 
+      ? `${t("history.notSaved")}\n[Legacy] ${t("history.generatedCode")}:\n${it.generated.code}`
+      : t("history.noContent"))}
                 </pre>
               )}
             </div>
 
             <details className="mt-2">
-              <summary className="cursor-pointer text-sm text-gray-700">Datasource</summary>
+              <summary className="cursor-pointer text-sm text-gray-700">{t("history.datasource")}</summary>
               <pre className="text-xs bg-gray-50 p-2 rounded overflow-auto">
 {JSON.stringify(it.datasource, null, 2)}
               </pre>

@@ -28,7 +28,8 @@
     "hide": "Ocultar",
     "viewQuery": "Ver consulta",
     "copy": "Copiar",
-    "newChat": "Nuevo chat"
+    "newChat": "Nuevo chat",
+    "loading": "Cargando…"
   },
   "errors": {
     "backend": "Error consultando el backend.",
@@ -49,6 +50,23 @@
       "mysql": "MySQL",
       "excel": "Excel",
       "admin": "BD Admin"
+    }
+  },
+  "history": {
+    "title": "Historial de consultas",
+    "clear": "Limpiar historial",
+    "empty": "No hay consultas aún.",
+    "rows": "filas",
+    "viewAnswer": "Ver respuesta",
+    "hideAnswer": "Ocultar respuesta",
+    "notSaved": "Respuesta no guardada en este item.",
+    "generatedCode": "Código generado",
+    "noContent": "Sin contenido",
+    "datasource": "Origen de datos",
+    "errors": {
+      "tokenExpired": "Sesión expirada. Inicia sesión nuevamente.",
+      "loadGeneric": "No se pudo cargar el historial. Intenta de nuevo.",
+      "clearGeneric": "No se pudo limpiar el historial. Intenta de nuevo."
     }
   },
   "main": {
