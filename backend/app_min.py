@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import os, json, re, unicodedata
+import os, json, re, unicodedata, sqlite3
 from typing import Any, Dict, List, Optional, Tuple, Literal, Union, Annotated
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4  # 👈 necesario para jti
@@ -9,7 +9,6 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
-
 from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -610,6 +609,18 @@ class Filter(BaseModel):
     def _before_operator(cls, v):
         return _normalize_op(v)
 
+class HistoryItem(BaseModel):
+    id: int
+    question: str
+    datasource: Dict[str, Any]
+    generated: Dict[str, Any]
+    row_count: int
+    created_at: str
+    answer_text: str
+
+class HistoryList(BaseModel):
+    items: List[HistoryItem]
+    total: int
 
 # --- parser de filtros escritos como string ---
 def _parse_filter_string(s: str) -> Optional[Dict[str, Any]]:
@@ -1184,22 +1195,83 @@ def chat(req: ChatRequest, payload: dict = Depends(require_jwt), db: Session = D
 
     ds = req.datasource
 
+    # === determinar respuesta según datasource ===
     if ds.type == "excel":
-        return answer_excel(req.question, ds, req.options)
-
-    # conexiones SQL directas
-    if ds.type in ("mysql", "postgres", "sqlite"):
-        return answer_sql(req.question, ds.sqlalchemy_url, req.options)
-
-    # conexión guardada por id (admin la creó antes)
-    if ds.type == "saved":
+        resp = answer_excel(req.question, ds, req.options)
+    elif ds.type in ("mysql", "postgres", "sqlite"):
+        resp = answer_sql(req.question, ds.sqlalchemy_url, req.options)
+    elif ds.type == "saved":
         conn = db.query(Connection).filter_by(id=ds.connection_id, is_active=True).first()
         if not conn:
             raise HTTPException(status_code=404, detail="Conexión no encontrada o inactiva")
-        return answer_sql(req.question, conn.sqlalchemy_url, req.options)
+        resp = answer_sql(req.question, conn.sqlalchemy_url, req.options)
+    else:
+        raise HTTPException(status_code=400, detail="Datasource no soportado")
 
-    raise HTTPException(status_code=400, detail="Datasource no soportado")
+    try:
+        user_id = str(
+            payload.get("sub")
+            or payload.get("user_id")
+            or payload.get("email")
+            or "anonymous"
+        )
+        row_count = len(resp.table.rows) if resp.table and resp.table.rows else 0
+        history_store.add(
+            user_id=user_id,
+            question=req.question,
+            datasource=req.datasource.model_dump(),
+            generated=resp.generated,
+            row_count=row_count,
+            answer_text=resp.answer_text,
+        )
+    except Exception as _e:
+        print("WARN: no se pudo guardar historial:", _e)
 
+    return resp
+
+@app.get("/history", response_model=HistoryList)
+def get_history(
+    limit: int = 100,
+    offset: int = 0,
+    payload: dict = Depends(require_jwt),
+    db: Session = Depends(get_db),   # opcional, lo dejo por consistencia
+):
+    user_id = str(
+        payload.get("sub")
+        or payload.get("user_id")
+        or payload.get("email")
+        or "anonymous"
+    )
+    rows = history_store.list(user_id=user_id, limit=limit, offset=offset)
+
+    items = [
+        HistoryItem(
+            id=r["id"],
+            question=r["question"],
+            datasource=r["datasource"],
+            generated=r["generated"],
+            row_count=r["row_count"],
+            created_at=r["created_at"],
+            answer_text=r.get("answer_text", "") or "",
+        )
+        for r in rows
+    ]
+    total = history_store.count(user_id=user_id)
+    return HistoryList(items=items, total=total)
+
+@app.delete("/history")
+def clear_history(
+    payload: dict = Depends(require_jwt),
+    db: Session = Depends(get_db),   # opcional, lo dejo por consistencia
+):
+    user_id = str(
+        payload.get("sub")
+        or payload.get("user_id")
+        or payload.get("email")
+        or "anonymous"
+    )
+    deleted = history_store.clear(user_id=user_id)
+    return {"deleted": deleted}
 
 
 # =========================

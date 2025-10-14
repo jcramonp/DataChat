@@ -13,7 +13,9 @@ export function clearAuth() {
   localStorage.removeItem(ROLE_KEY);
 }
 export function getAuth() {
-  return { token: localStorage.getItem(TOKEN_KEY), role: localStorage.getItem(ROLE_KEY) };
+  const token = localStorage.getItem(TOKEN_KEY);
+  const role = localStorage.getItem(ROLE_KEY);
+  return { token, role };
 }
 
 export async function login({ email, password }) {

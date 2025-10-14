@@ -1,5 +1,4 @@
-// src/services/api.ts
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+export const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 export type ChatOptions = { language: 'es' | 'en'; max_rows?: number };
 
@@ -15,11 +14,30 @@ export type TableData = {
 
 export type Generated = { type: 'sql' | 'pandas'; code: string };
 
+export function getAuth() {
+  const token = localStorage.getItem('dc_token');
+  const role = (localStorage.getItem('dc_role') as 'user' | 'admin' | null) || null;
+  return { token, role };
+}
+
+// util opcional
+export async function apiGet(path: string, token?: string) {
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(`GET ${path} failed: ${res.status} ${res.statusText} ${txt}`);
+  }
+  return res.json();
+}
+
+
 export type ChatResponse = {
-  answer_text: string;
-  generated: Generated;
-  table?: TableData | null;
-  notices: string[];
+  answer: string;
+  table?: TableData;
+  generated?: Generated;
+  error?: string;
 };
 
 export async function askData(params: {

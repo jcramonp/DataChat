@@ -5,6 +5,7 @@ import './MainPage.css';
 import { useAuth } from '../auth/AuthContext';
 import ConnectionCard from "../components/ConnectionCard";
 import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from "react-i18next";
 
 type Msg = {
@@ -18,6 +19,7 @@ type SourceType = 'mysql' | 'excel' | 'saved';
 
 export default function MainPage() {
   const { auth } = useAuth();
+  const navigate = useNavigate();
   const { t, i18n } = useTranslation();
 
   // Chat
@@ -233,10 +235,31 @@ export default function MainPage() {
       <section className="container mt-16">
         <div className="chat-card">
           <div className="chat-header">
+            <h3>DataChat Assistant</h3>
+            <div className="chat-actions" style={{ display: 'flex', gap: 8 }}>
+              <button type="button" title="New Chat" onClick={() => setMessages([])}>
             <h3>{t("main.chat.title", "DataChat Assistant")}</h3>
             <div className="chat-actions">
               <button type="button" title={t("common.newChat")} onClick={() => setMessages([])}>
                 ＋
+              </button>
+
+              {/* NEW: botón Historial dentro del chat */}
+              <button
+                type="button"
+                title="Ver historial"
+                onClick={() => navigate('/history')}
+                style={{
+                  border: 'none',
+                  borderRadius: 8,
+                  padding: '6px 12px',
+                  cursor: 'pointer',
+                  background: '#f0ecfb',
+                  color: '#5a49d6',
+                  fontWeight: 600,
+                }}
+              >
+                Historial
               </button>
             </div>
           </div>

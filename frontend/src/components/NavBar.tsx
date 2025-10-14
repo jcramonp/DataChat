@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import './NavBar.css';
 import Logo from './Logo';
-import { getAuth, clearAuth } from '../services/api';
+import { getAuth } from '../services/api';
 import { useTranslation } from "react-i18next";
 import LanguageSelector from "./LanguageSelector";
 
@@ -18,7 +18,8 @@ export default function NavBar() {
   );
 
   const logout = () => {
-    clearAuth();
+    // Replace with appropriate logout logic if needed, e.g., removing token from localStorage
+    localStorage.removeItem('token');
     nav('/login', { replace: true });
   };
 

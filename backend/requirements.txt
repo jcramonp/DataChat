@@ -4,10 +4,11 @@ pandas
 openpyxl
 sqlalchemy
 pymysql
+PyJWT
 langchain
-langchain-core
-langchain-openai
-langchain-text-splitters
+langchain_core
+langchain_openai
+langchain_text_splitters
 pydantic>=2,<3
 python-dotenv
 PyJWT
