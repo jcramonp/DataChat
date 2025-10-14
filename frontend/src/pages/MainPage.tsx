@@ -119,7 +119,7 @@ export default function MainPage() {
           : ({ type: 'saved', connection_id: Number(connectionId) } as const);
 
       const resp = await askData({
-        token: auth.token,
+        token: auth.token ?? "",
         question: q,
         datasource,
         options: { language: lang, max_rows: 200 },
@@ -127,7 +127,7 @@ export default function MainPage() {
 
       pushMessage({
         role: 'assistant',
-        text: resp.answer_text,
+        text: resp.answer,
         sql: resp.generated,
         table: resp.table ?? null,
       });
@@ -235,9 +235,6 @@ export default function MainPage() {
       <section className="container mt-16">
         <div className="chat-card">
           <div className="chat-header">
-            <h3>DataChat Assistant</h3>
-            <div className="chat-actions" style={{ display: 'flex', gap: 8 }}>
-              <button type="button" title="New Chat" onClick={() => setMessages([])}>
             <h3>{t("main.chat.title", "DataChat Assistant")}</h3>
             <div className="chat-actions">
               <button type="button" title={t("common.newChat")} onClick={() => setMessages([])}>
