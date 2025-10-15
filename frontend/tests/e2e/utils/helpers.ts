@@ -4,10 +4,92 @@ export async function setLangES(page: Page) {
   await page.addInitScript(() => localStorage.setItem('i18nextLng', 'es'));
 }
 
+/**
+ * Nuevo helper recomendado para /sheets:
+ * - Activa el mock de Excel (window.__E2E_FORCE_EXCEL__)
+ * - Inyecta auth y recuerda la fuente 'excel' ANTES de que cargue la app
+ *
+ * Uso:
+ *   await primeApp(page, 'user'); // o 'admin'
+ *   await page.goto('/sheets');
+ */
+export async function primeApp(
+  page: Page,
+  role: 'user' | 'admin' = 'user',
+  forceExcel = true
+) {
+  await page.addInitScript(({ role, forceExcel }) => {
+    // @ts-ignore - bandera que lee MainPage para mockear Excel
+    (window as any).__E2E_FORCE_EXCEL__ = !!forceExcel;
+    try {
+      // ✅ Mantén las llaves antiguas…
+      localStorage.setItem('token', 'e2e-token');
+      localStorage.setItem('role', role);
+
+      // ✅ …y añade las que usa la app actualmente
+      localStorage.setItem('dc_token', 'e2e-token');
+      localStorage.setItem('dc_role', role);
+
+      // También en sessionStorage por si la app mira ahí
+      sessionStorage.setItem('token', 'e2e-token');
+      sessionStorage.setItem('role', role);
+      sessionStorage.setItem('dc_token', 'e2e-token');
+      sessionStorage.setItem('dc_role', role);
+
+      if (forceExcel) {
+        localStorage.setItem('dc_source', 'excel');
+        sessionStorage.setItem('dc_source', 'excel');
+      }
+
+      // Re-seed en microtask por si algo limpia en el primer tick
+      Promise.resolve().then(() => {
+        try {
+          localStorage.setItem('dc_token', 'e2e-token');
+          localStorage.setItem('dc_role', role);
+          sessionStorage.setItem('dc_token', 'e2e-token');
+          sessionStorage.setItem('dc_role', role);
+          if (forceExcel) {
+            localStorage.setItem('dc_source', 'excel');
+            sessionStorage.setItem('dc_source', 'excel');
+          }
+        } catch {}
+      });
+    } catch {}
+  }, { role, forceExcel });
+}
+
 export async function setFakeAuth(page: Page) {
-  // ajusta la clave si tu app usa otra (ej: 'auth', 'jwt', etc.)
-  await page.addInitScript(() => localStorage.setItem('token', 'e2e-token'));
-  localStorage.setItem('role', 'admin');
+  await page.addInitScript(() => {
+    try {
+      // Mantén antiguas
+      localStorage.setItem('token', 'e2e-token');
+      localStorage.setItem('role', 'admin');
+
+      // Añade las actuales
+      localStorage.setItem('dc_token', 'e2e-token');
+      localStorage.setItem('dc_role', 'admin');
+
+      // También en sessionStorage
+      sessionStorage.setItem('token', 'e2e-token');
+      sessionStorage.setItem('role', 'admin');
+      sessionStorage.setItem('dc_token', 'e2e-token');
+      sessionStorage.setItem('dc_role', 'admin');
+
+      // Fuente excel (por si aplica)
+      localStorage.setItem('dc_source', 'excel');
+      sessionStorage.setItem('dc_source', 'excel');
+
+      // Re-seed microtask
+      Promise.resolve().then(() => {
+        try {
+          localStorage.setItem('dc_token', 'e2e-token');
+          localStorage.setItem('dc_role', 'admin');
+          sessionStorage.setItem('dc_token', 'e2e-token');
+          sessionStorage.setItem('dc_role', 'admin');
+        } catch {}
+      });
+    } catch {}
+  });
 }
 
 export async function maybeClick(

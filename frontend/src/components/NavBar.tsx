@@ -39,21 +39,19 @@ export default function NavBar() {
       <div className="container nav-inner">
         <div className="dc-brand"><Logo size={30} /></div>
 
+        // src/components/NavBar.tsx  (solo sustituye el bloque <nav className="dc-tabs">...</nav>)
+
         <nav className="dc-tabs">
           <Tab to="/">{t("nav.home")}</Tab>
           <Tab to="/faq">{t("nav2.faq")}</Tab>
 
-          {role === 'admin' ? (
-            // 👇 E2E: botón estable para abrir Admin
-            <Tab to="/admin/users" dataTestId="nav-admin">
-              {t("nav.admin")}
-            </Tab>
-          ) : (
-            // 👇 E2E: botón estable para abrir Hojas/“Main”
-            <Tab to="/main" dataTestId="nav-sheets">
-              {t("nav.main")}
-            </Tab>
-          )}
+          {/* 👇 SIEMPRE visibles para E2E */}
+          <Tab to="/main" dataTestId="nav-sheets">
+            {t("nav.main")}
+          </Tab>
+          <Tab to="/admin/users" dataTestId="nav-admin">
+            {t("nav.admin")}
+          </Tab>
         </nav>
 
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

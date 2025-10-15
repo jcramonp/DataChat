@@ -88,11 +88,11 @@ export default function DataTable({
       </div>
 
       <div className="dt-table-wrapper">
-        <table className="dt-table">
+        <table className="dt-table" role="table" data-testid="grid">
           <thead>
             <tr>
               {columns.map(c => (
-                <th key={c} title={c}>
+                <th key={c} title={c} scope="col">
                   {c}
                 </th>
               ))}

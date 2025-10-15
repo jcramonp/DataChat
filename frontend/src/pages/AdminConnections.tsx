@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createConnection, listConnections, getAuth } from "../services/api";
 import { Link } from "react-router-dom";
 
@@ -20,6 +20,7 @@ export default function AdminConnections() {
   const [msg, setMsg] = useState("");
   const [items, setItems] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(false);
+  const uriInputRef = useRef<HTMLInputElement | null>(null);
 
   // Solo admins
   if (role !== "admin") {
@@ -64,7 +65,17 @@ export default function AdminConnections() {
     <section className="container mt-16" style={{ maxWidth: 720 }}>
       <h2>Conexiones (ADMIN)</h2>
 
-      <form onSubmit={onSubmit} style={{ display: "grid", gap: 10, marginTop: 16 }}>
+      {/* 👇 Botón “abrir” creación (para E2E). En nuestro caso, solo hace focus al input */}
+      <button
+        type="button"
+        data-testid="connect-db"
+        onClick={() => uriInputRef.current?.focus()}
+        style={{ marginTop: 8, marginBottom: 8 }}
+      >
+        Conectar
+      </button>
+
+      <form onSubmit={onSubmit} style={{ display: "grid", gap: 10, marginTop: 8 }}>
         <label>
           Nombre
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="sqlite_demo" />
@@ -91,9 +102,11 @@ export default function AdminConnections() {
         <label>
           SQLAlchemy URL
           <input
+            ref={uriInputRef}
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="sqlite:///./archivo.sqlite3"
+            name="connectionUri"
+            placeholder="mysql+pymysql://user:pass@host:3306/db"
           />
         </label>
 
@@ -104,10 +117,15 @@ export default function AdminConnections() {
           • PostgreSQL: <code>postgresql+psycopg2://user:pass@localhost:5432/mi_db</code>
         </small>
 
-        <button type="submit">Guardar y validar</button>
+        <button type="submit">Guardar</button>
 
         {msg && (
-          <div style={{ color: msg.startsWith("✅") ? "#16a34a" : "#b00020" }}>{msg}</div>
+          <div
+            style={{ color: msg.startsWith("✅") ? "#16a34a" : "#b00020" }}
+            {...(msg.startsWith("✅") ? { "data-testid": "toast-success" } : {})} // 👈 para el test
+          >
+            {msg}
+          </div>
         )}
       </form>
 

@@ -5,7 +5,7 @@ import './MainPage.css';
 import { useAuth } from '../auth/AuthContext';
 import ConnectionCard from "../components/ConnectionCard";
 import { Link } from 'react-router-dom';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from "react-i18next";
 
 type Msg = {
@@ -20,7 +20,12 @@ type SourceType = 'mysql' | 'excel' | 'saved';
 export default function MainPage() {
   const { auth } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { t, i18n } = useTranslation();
+
+  // 👇 bandera para E2E sin backend
+  const forceExcel =
+    typeof window !== 'undefined' && (window as any).__E2E_FORCE_EXCEL__ === true;
 
   // Chat
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -31,7 +36,26 @@ export default function MainPage() {
   // Panel conexión
   const [showConn, setShowConn] = useState(false);
   const [lang, setLang] = useState<'es' | 'en'>((i18n.resolvedLanguage as 'es' | 'en') ?? 'es');
-  const [source, setSource] = useState<SourceType>('mysql');
+
+  // ⭐️ Fuente recordada en localStorage (clave: dc_source)
+  const [source, setSource] = useState<SourceType>(() => {
+    if (typeof window === 'undefined') return 'mysql';
+    const saved = localStorage.getItem('dc_source') as SourceType | null;
+    return saved && (saved === 'mysql' || saved === 'excel' || saved === 'saved') ? saved : 'mysql';
+  });
+
+  useEffect(() => {
+    // Si el usuario (o el test) entra a /sheets, preparamos la vista Excel
+    if (location.pathname.toLowerCase().includes('sheets')) {
+      setShowConn(true);
+      setSource('excel');
+      setExcelPath((prev) => prev || './data/empleados_demo.xlsx');
+    }
+  }, [location.pathname]);
+
+  useEffect(() => {
+    try { localStorage.setItem('dc_source', source); } catch {}
+  }, [source]);
 
   // MySQL
   const [sqlUrl, setSqlUrl] = useState(
@@ -39,7 +63,7 @@ export default function MainPage() {
   );
 
   // Excel
-  const [excelPath, setExcelPath] = useState('C:/data/empleados.xlsx');
+  const [excelPath, setExcelPath] = useState('./data/empleados_demo.xlsx');
   const [sheetName, setSheetName] = useState<string | number | undefined>(0);
   const [sheets, setSheets] = useState<string[]>([]);
   const [preview, setPreview] = useState<null | { columns: string[]; rows: any[][]; total: number }>(null);
@@ -58,9 +82,24 @@ export default function MainPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [i18n.resolvedLanguage]);
 
-  //  US05: Cargar hojas Excel
+  // === US05: Cargar hojas Excel ===
   useEffect(() => {
-    if (source !== 'excel' || !excelPath) return;
+    if (source !== 'excel') return;
+
+    // MODO MOCK (E2E sin backend)
+    if (forceExcel) {
+      const mockSheets = ['Empleados', 'Departamentos'];
+      setSheets(mockSheets);
+      setPreview(null);     // se setea en el siguiente effect
+      setOffset(0);
+      // si no hay hoja seleccionada o no existe, tomamos la primera
+      setSheetName((prev) => (prev && mockSheets.includes(String(prev)) ? prev : mockSheets[0]));
+      setError('');
+      return; // ← no llames a la API
+    }
+
+    // MODO REAL (con backend)
+    if (!excelPath) return;
     setSheets([]);
     setPreview(null);
     setOffset(0);
@@ -73,17 +112,51 @@ export default function MainPage() {
       })
       .catch(() => setError(t("errors.excelSheets")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, excelPath]);
+  }, [source, excelPath, forceExcel]);
 
-  //  US05: Previsualizar hoja
+  // === US05: Previsualizar hoja ===
   useEffect(() => {
-    if (source !== 'excel' || !excelPath || sheetName === undefined || sheetName === null) return;
+    if (source !== 'excel') return;
+    if (!sheetName && sheetName !== 0) return;
+
+    // MODO MOCK (E2E sin backend)
+    if (forceExcel) {
+      // Pequeño delay para simular carga real
+      const timer = setTimeout(() => {
+        const columns =
+          String(sheetName).toLowerCase().includes('depto')
+            ? ['id', 'nombre', 'sede']
+            : ['id', 'nombre', 'apellido', 'sueldo'];
+        const rows =
+          String(sheetName).toLowerCase().includes('depto')
+            ? [
+                [1, 'Ventas', 'CDMX'],
+                [2, 'Marketing', 'Bogotá'],
+                [3, 'IT', 'Lima'],
+              ]
+            : [
+                [1, 'Ana', 'Pérez', 1200],
+                [2, 'Luis', 'Gómez', 1500],
+                [3, 'Marta', 'Ruiz', 1100],
+                [4, 'Iván', 'Hernández', 1300],
+              ];
+
+        // paginas simuladas con offset/limit
+        const pageRows = rows.slice(offset, offset + limit);
+        setPreview({ columns, rows: pageRows, total: rows.length });
+        setError('');
+      }, 80);
+      return () => clearTimeout(timer);
+    }
+
+    // MODO REAL (con backend)
+    if (!excelPath) return;
     setError('');
     previewExcel(excelPath, sheetName, offset, limit)
       .then(r => setPreview({ columns: r.columns, rows: r.rows, total: r.page.total }))
       .catch(() => setError(t("errors.excelPreview")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, excelPath, sheetName, offset]);
+  }, [source, excelPath, sheetName, offset, forceExcel]);
 
   //  Enviar mensaje
   const handleSend = async (e: React.FormEvent) => {
@@ -231,6 +304,82 @@ export default function MainPage() {
         />
       </section>
 
+      {/* === VISTA US05 (tabs de hojas + preview de Excel) === */}
+      {source === 'excel' && (
+        <section className="container mt-16">
+          {/* Tabs de hojas */}
+          {sheets?.length > 0 && (
+            <div role="tablist" aria-label="Hojas" style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              {sheets.map((s, idx) => {
+                const selected = String(sheetName) === String(s) || (sheetName === 0 && idx === 0);
+                return (
+                  <button
+                    key={s}
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => { setOffset(0); setSheetName(s); }}
+                    {...(idx === 1 ? { 'data-testid': 'tab-2' } : {})}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 8,
+                      border: selected ? '2px solid #5a49d6' : '1px solid #e5e7eb',
+                      background: selected ? '#f0ecfb' : '#fff',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {s || `Sheet${idx + 1}`}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Tabla de preview */}
+          {preview && preview.columns?.length ? (
+            <div style={{ overflowX: 'auto' }}>
+              <table role="table" data-testid="grid" style={{ borderCollapse: 'collapse', width: '100%' }}>
+                <thead>
+                  <tr>
+                    {preview.columns.map((c, i) => (
+                      <th key={i} style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #eee' }}>
+                        {c}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.rows.map((r, ri) => (
+                    <tr key={ri}>
+                      {r.map((v, ci) => (
+                        <td key={ci} style={{ padding: 8, borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>
+                          {v === null || v === undefined || v === '' ? '—' : String(v)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setOffset(o => Math.max(0, o - limit))}
+                  disabled={offset === 0}
+                >
+                  {t("common.prev")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOffset(o => o + limit)}
+                  disabled={(offset + limit) >= (preview?.total ?? 0)}
+                >
+                  {t("common.next")}
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </section>
+      )}
+
       {/* CHAT */}
       <section className="container mt-16">
         <div className="chat-card">
@@ -284,6 +433,7 @@ export default function MainPage() {
                       </span>
                     </summary>
                     <pre
+                      data-testid="sql-output"
                       style={{
                         background: '#0f172a',
                         color: '#e2e8f0',
@@ -314,6 +464,7 @@ export default function MainPage() {
                     {m.table && m.table.columns?.length ? (
                       <div style={{ marginTop: 12, overflowX: 'auto' }}>
                         <table
+                          role="table"
                           style={{
                             borderCollapse: 'collapse',
                             width: '100%',

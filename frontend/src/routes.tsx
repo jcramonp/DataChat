@@ -44,13 +44,14 @@ export const router = createBrowserRouter([
 
       // rutas de usuario
       { path: 'main', element: <RequireUser><MainPage /></RequireUser> },
+      { path: 'sheets', element: <RequireUser><MainPage /></RequireUser> },
       { path: 'history', element: <RequireUser><HistoryRoute /></RequireUser> },
 
       // rutas de admin
       { path: 'admin', element: <RequireAdmin><AdminHome /></RequireAdmin> },
       { path: 'admin/users', element: <RequireAdmin><AdminUsers /></RequireAdmin> },
       { path: 'admin/connections', element: <RequireAdmin><AdminConnections /></RequireAdmin> },
-      { path: '/faq', element: <FaqPage />},
+      { path: 'faq', element: <FaqPage />},
     ],
   },
 ]);
