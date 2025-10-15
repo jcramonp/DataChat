@@ -11,14 +11,25 @@ export default function NavBar() {
   const { token, role } = getAuth();
   const { t } = useTranslation();
 
-  const Tab = ({ to, children }: { to: string; children: React.ReactNode }) => (
-    <Link to={to} className={`nav-pill ${pathname === to ? 'active' : ''}`}>
+  const Tab = ({
+    to,
+    children,
+    dataTestId,
+  }: {
+    to: string;
+    children: React.ReactNode;
+    dataTestId?: string;
+  }) => (
+    <Link
+      to={to}
+      className={`nav-pill ${pathname === to ? 'active' : ''}`}
+      {...(dataTestId ? { 'data-testid': dataTestId } : {})}
+    >
       {children}
     </Link>
   );
 
   const logout = () => {
-    // Replace with appropriate logout logic if needed, e.g., removing token from localStorage
     localStorage.removeItem('token');
     nav('/login', { replace: true });
   };
@@ -31,9 +42,18 @@ export default function NavBar() {
         <nav className="dc-tabs">
           <Tab to="/">{t("nav.home")}</Tab>
           <Tab to="/faq">{t("nav2.faq")}</Tab>
-          {role === 'admin'
-            ? <Tab to="/admin/users">{t("nav.admin")}</Tab>
-            : <Tab to="/main">{t("nav.main")}</Tab>}
+
+          {role === 'admin' ? (
+            // 👇 E2E: botón estable para abrir Admin
+            <Tab to="/admin/users" dataTestId="nav-admin">
+              {t("nav.admin")}
+            </Tab>
+          ) : (
+            // 👇 E2E: botón estable para abrir Hojas/“Main”
+            <Tab to="/main" dataTestId="nav-sheets">
+              {t("nav.main")}
+            </Tab>
+          )}
         </nav>
 
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -45,7 +65,7 @@ export default function NavBar() {
           ) : (
             <Link to="/login" className="nav-pill">{t("nav.login")}</Link>
           )}
-          <LanguageSelector /> {/* +++ */}
+          <LanguageSelector />
         </div>
       </div>
     </header>

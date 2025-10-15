@@ -1,0 +1,57 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`estructura estable (snapshot) 1`] = `
+<div>
+  <main
+    class="container mt-16"
+  >
+    <section
+      class="chat-card"
+      style="border-radius: 16px;"
+    >
+      <h1
+        style="margin: 0px;"
+      >
+        Preguntas frecuentes
+      </h1>
+      <p
+        style="color: rgb(107, 114, 128);"
+      >
+        faq.intro
+      </p>
+      <div
+        style="display: grid; gap: 10px; margin-top: 16px;"
+      >
+        <details
+          style="background: rgb(255, 255, 255); border-radius: 12px; padding: 10px 14px;"
+        >
+          <summary
+            style="cursor: pointer; font-weight: 600;"
+          >
+            ¿Cómo conecto mi base?
+          </summary>
+          <p
+            style="margin-top: 8px; color: rgb(55, 65, 81);"
+          >
+            Ve a Admin → Conexiones.
+          </p>
+        </details>
+        <details
+          style="background: rgb(255, 255, 255); border-radius: 12px; padding: 10px 14px;"
+        >
+          <summary
+            style="cursor: pointer; font-weight: 600;"
+          >
+            ¿Excel soportado?
+          </summary>
+          <p
+            style="margin-top: 8px; color: rgb(55, 65, 81);"
+          >
+            Sí, xlsx/csv para demo.
+          </p>
+        </details>
+      </div>
+    </section>
+  </main>
+</div>
+`;
