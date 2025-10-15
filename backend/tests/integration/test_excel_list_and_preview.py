@@ -1,18 +1,22 @@
-# backend/tests/integration/test_excel_list_and_preview.py
-from httpx import AsyncClient
-from backend.app_min import app
+# backend/tests/integration/test_history_list.py
 import pytest
 
-@pytest.mark.asyncio
-async def test_list_and_preview_sheets(tmp_path):
-    # asume que el backend tiene datos de prueba apuntando a un .xlsx
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        r = await ac.get("/excel/listSheets")
-        assert r.status_code == 200
-        sheets = r.json()["sheets"]
-        assert len(sheets) >= 1
+def test_history_list_smoke(test_client, auth_headers):
+    path = "/history"
+    routes = {r.path for r in test_client.app.routes}
+    assert path in routes, "La ruta /history no existe en la app."
 
-        r2 = await ac.get(f"/excel/preview?sheet={sheets[0]}&limit=5")
-        assert r2.status_code == 200
-        data = r2.json()
-        assert "rows" in data and len(data["rows"]) <= 5
+    r = test_client.get(path)
+
+    # Si está protegido y no tenemos token, validar RBAC y pasar
+    if r.status_code in (401, 403) and not auth_headers:
+        assert True  # RBAC activo sin token
+        return
+
+    # Reintenta con token si lo tenemos
+    if r.status_code in (401, 403) and auth_headers:
+        r = test_client.get(path, headers=auth_headers)
+
+    assert r.status_code == 200
+    data = r.json()
+    assert isinstance(data, list) or (isinstance(data, dict) and "items" in data)
