@@ -3,7 +3,7 @@ import os, json, re, sqlite3
 from typing import Any, Dict, List, Optional, Tuple, Literal, Union, Annotated
 from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI, Depends, HTTPException, status, Depends
+from fastapi import FastAPI, Depends, HTTPException, status, Depends, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
@@ -26,6 +26,8 @@ import pandas as pd
 from dotenv import load_dotenv
 from passlib.context import CryptContext
 
+
+ENABLE_DEBUG = os.getenv("DATACHAT_DEBUG", "0") == "1"
 
 
 # ========= HistoryStore (inlined) =========
@@ -146,7 +148,10 @@ load_dotenv()
 app = FastAPI(title="DataChatbot MVP", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -196,6 +201,86 @@ def require_roles(roles: list[str]):
             raise HTTPException(status_code=403, detail="Forbidden: insufficient role")
         return user
     return _dep
+
+
+@app.get("/excel/sheets")
+def excel_list_sheets(
+    path: str = Query(..., description="Ruta local del archivo .xlsx"),
+    token: HTTPAuthorizationCredentials = Depends(auth_scheme),
+):
+    # Auth (JWT)
+    require_jwt(token)
+
+    try:
+        if not os.path.exists(path):
+            raise HTTPException(status_code=404, detail=f"Archivo no encontrado: {path}")
+
+        # CSV no tiene hojas → devuelve “sheet 0”
+        if path.lower().endswith(".csv"):
+            return {"sheets": ["0"]}
+
+        xls = pd.ExcelFile(path)
+        return {"sheets": xls.sheet_names}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error leyendo hojas: {e}")
+
+
+@app.get("/excel/preview")
+def excel_preview(
+    path: str = Query(..., description="Ruta local del archivo .xlsx/.csv"),
+    sheet_name: Optional[str] = Query("0", description="Nombre o índice de hoja"),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=500),
+    token: HTTPAuthorizationCredentials = Depends(auth_scheme),
+):
+    # Auth (JWT)
+    require_jwt(token)
+
+    try:
+        if not os.path.exists(path):
+            raise HTTPException(status_code=404, detail=f"Archivo no encontrado: {path}")
+
+        # Normalizar sheet_name a int si es dígito
+        sn: Optional[Union[int, str]]
+        if sheet_name is None:
+            sn = 0
+        elif isinstance(sheet_name, str) and sheet_name.isdigit():
+            sn = int(sheet_name)
+        else:
+            sn = sheet_name
+
+        # Leer DataFrame (solo columnas; filas se cortan después)
+        if path.lower().endswith(".csv"):
+            df = pd.read_csv(path)
+        else:
+            df = pd.read_excel(path, sheet_name=sn)
+
+        total = int(len(df))
+        start = min(max(offset, 0), total)
+        end = min(start + limit, total)
+
+        # slice de filas
+        df_page = df.iloc[start:end]
+
+        # Serializar tabla
+        columns = [str(c) for c in df_page.columns]
+        rows = [[None if pd.isna(v) else (v.isoformat() if hasattr(v, "isoformat") else v) for v in r]
+                for r in df_page.itertuples(index=False, name=None)]
+
+        return {
+            "columns": columns,
+            "rows": rows,
+            "page": {"offset": start, "limit": limit, "total": total}
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error en preview: {e}")
+
 
 # ========= Persistencia de usuarios (SQLite) =========
 DB_URL = os.getenv("AUTH_DB_URL", "sqlite:///./auth.db")
@@ -841,6 +926,7 @@ class ChatResponse(BaseModel):
     generated: Dict[str, Any]  # {"type": "sql"|"pandas", "code": str}
     table: Optional[TableData] = None
     notices: List[str] = []
+    debug: Optional[Dict[str, Any]] = None
 
 
 # =========================
@@ -1087,19 +1173,11 @@ def exec_pandas(code: str, df: pd.DataFrame) -> pd.DataFrame:
 
     env = {"df": df, "pd": pd}
     SAFE_BUILTINS = {
-        "abs": abs,
-        "min": min,
-        "max": max,
-        "sum": sum,
-        "len": len,
-        "sorted": sorted,
-        "round": round,
-        "range": range,
-        "list": list,
-        "dict": dict,
-        "set": set,
-        "tuple": tuple,
-        "locals": (lambda: env),  # evita NameError si algo llama locals()
+        "str": str, "len": len, "int": int, "float": float, "bool": bool,
+        "list": list, "dict": dict, "set": set, "tuple": tuple,
+        "sum": sum, "min": min, "max": max, "abs": abs, "round": round,
+        "range": range, "enumerate": enumerate, "zip": zip, "map": map, "filter": filter,
+        "any": any, "all": all, "sorted": sorted, "locals": (lambda: env),  # evita NameError si algo llama locals()
     }
     GLOBALS = {"__builtins__": SAFE_BUILTINS}
 
@@ -1204,69 +1282,105 @@ def answer_excel(question: str, source: ExcelSource, opts: ChatOptions) -> ChatR
     )
     schema = extract_excel_schema(source.path, sheet_name=source.sheet_name)
 
-    # 1) PLAN por LLM tipado (structured output) con fallback a reglas
+    debug_info = {
+        "question": question,
+        "columns": schema["columns"],
+        "dtypes": schema["dtypes"],
+    }
+
     try:
-        # 👇 Fuerza el método clásico de function calling (evita el error de schema estricto)
-        structured = PLAN_PROMPT_FEWSHOT | llm.with_structured_output(
-            PlanModel, method="function_calling"
+        # (a) Construir mensajes del prompt
+        prompt_msgs = PLAN_PROMPT_FEWSHOT.format_messages(
+            columns=schema["columns"], question=question
         )
-        plan_obj: PlanModel = structured.invoke(
-            {"columns": schema["columns"], "question": question}
-        )
-        plan = plan_obj.dict()
-        print("DEBUG PLAN (LLM):", plan)
+
+        # (b) Obtener TEXTO crudo del LLM (sin structured output)
+        # OJO: adapta esta línea a tu lib/cliente (LangChain, OpenAI SDK, etc.).
+        # La idea es: pasarle prompt_msgs y obtener un string.
+        llm_raw_text = llm.invoke(prompt_msgs) if hasattr(llm, "invoke") else llm(prompt_msgs)
+        # Si 'llm_raw_text' es un objeto tipo Message, extrae el .content
+        if hasattr(llm_raw_text, "content"):
+            llm_raw_text = llm_raw_text.content
+
+        print("DEBUG LLM RAW PLAN:", llm_raw_text)
+        debug_info["llm_raw_plan"] = llm_raw_text
+
+        # (c) Parseo tolerante + validación tipada
+        plan_dict = parse_plan_json(llm_raw_text)
+        plan_obj: PlanModel = PlanModel.model_validate(plan_dict)
+        plan = plan_obj.model_dump()
+        print("DEBUG PLAN (PARSED):", plan)
+        debug_info["plan_parsed"] = plan
 
     except Exception as e:
         print("WARN: PLAN LLM falló, usando plan por reglas:", e)
         plan = make_plan_rule_based(question, schema)
-        print("DEBUG PLAN (RULE):", plan)
+        debug_info["plan_parsed"] = {"_source": "rule_based", **plan}
 
     # 2) Construcción determinista de la expresión Pandas
     try:
         py_code = build_pandas_expr(plan)
         print("DEBUG py_code:", py_code)
+        debug_info["pandas_expr"] = py_code
     except Exception as e:
         # 3) Último fallback: pedir expresión directa al LLM (por robustez)
         print("WARN: build_pandas_expr falló, fallback a generador directo:", e)
         prompt = PANDAS_PROMPT.format_messages(
             columns=schema["columns"], dtypes=schema["dtypes"], question=question
         )
-        py_code_raw = (llm | parser).invoke(prompt)
+
+        # IMPORTANTE: capturamos el TEXTO CRUDO que devuelve el LLM
+        llm_raw_resp = (llm | parser).invoke(prompt)
+        # si el cliente devuelve un objeto tipo Message, extrae su .content
+        if hasattr(llm_raw_resp, "content"):
+            llm_raw_text = llm_raw_resp.content
+        else:
+            llm_raw_text = llm_raw_resp
+
+        # log y debug del RAW
+        print("DEBUG LLM RAW PANDAS_EXPR:", llm_raw_text)
+        debug_info["llm_raw_pandas_expr"] = llm_raw_text
+
         # Desenvuelve bloque ``` y quita "out = ..." si viniera así
-        py_code = _unwrap_code_block(py_code_raw).strip()
+        py_code = _unwrap_code_block(llm_raw_text).strip()
         if py_code.startswith("out ="):
             py_code = py_code.split("=", 1)[1].strip()
+
         print("DEBUG py_code (FALLBACK):", py_code)
+        debug_info["pandas_expr"] = py_code
 
     # 4) Ejecutar de forma segura
+    exec_error_msg = None
     try:
-        out = exec_pandas(py_code, df)
-    except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Error ejecutando Pandas: {str(e)} | Código: {py_code}",
-        )
+        out = exec_pandas(py_code, df)  # tu sandbox/ejecutor
+
+    except Exception as ex:
+        exec_error_msg = f"{type(ex).__name__}: {ex}"
+        print("ERROR executing pandas expr:", exec_error_msg)
+        debug_info["exec_error"] = exec_error_msg
+        # re-lanzamos para que el manejador superior devuelva 4xx/5xx con el error
+        raise
 
     # 5) Limitar y empaquetar respuesta
     if len(out) > opts.max_rows:
         out = out.head(opts.max_rows)
 
-    table = TableData(
-        columns=[str(c) for c in out.columns],
-        rows=out.astype(object).where(pd.notnull(out), None).values.tolist(),
-    )
+    # Serializar DataFrame -> TableData
+    columns = [str(c) for c in out.columns]
+    rows = [
+        [None if pd.isna(v) else (v.isoformat() if hasattr(v, "isoformat") else v) for v in r]
+        for r in out.itertuples(index=False, name=None)
+    ]
 
-    answer_text = (
-        f"Mostrando {len(table.rows)} fila(s)."
-        if opts.language == "es"
-        else f"Showing {len(table.rows)} row(s)."
-    )
+    # 1) Opción A: pasar instancia de Pydantic
+    table_obj = TableData(columns=columns, rows=rows)
 
     return ChatResponse(
-        answer_text=answer_text,
+        answer_text=f"Mostrando {len(out)} fila(s).",
         generated={"type": "pandas", "code": py_code},
-        table=table,
+        table=table_obj,
         notices=[],
+        debug=debug_info if ENABLE_DEBUG else None
     )
 
 

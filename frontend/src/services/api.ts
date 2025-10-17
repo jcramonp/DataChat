@@ -20,24 +20,22 @@ export function getAuth() {
   return { token, role };
 }
 
-// util opcional
-export async function apiGet(path: string, token?: string) {
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-  });
-  if (!res.ok) {
-    const txt = await res.text().catch(() => '');
-    throw new Error(`GET ${path} failed: ${res.status} ${res.statusText} ${txt}`);
-  }
-  return res.json();
-}
-
+export type ChatDebug = {
+  question?: string;
+  columns?: string[];
+  dtypes?: Record<string, string>;
+  llm_raw_plan?: string;      // <-- texto crudo del LLM
+  plan_parsed?: any;          // <-- JSON ya parseado
+  pandas_expr?: string;       // <-- expresión generada
+  exec_error?: string;        // <-- mensaje de error si falló
+};
 
 export type ChatResponse = {
-  answer: string;
-  table?: TableData;
-  generated?: Generated;
-  error?: string;
+  answer_text: string;
+  generated: { type: "pandas" | "sql"; code: string };
+  table?: { columns: string[]; rows: any[][] } | null;
+  notices: string[];
+  debug?: ChatDebug | null;   // <-- nuevo
 };
 
 export async function askData(params: {
@@ -87,14 +85,20 @@ export async function login({ email, password }: { email: string; password: stri
 // ===========================
 // US05 - Excel endpoints
 // ===========================
-export async function listExcelSheets(path: string): Promise<{ path: string; sheets: string[] }> {
-  const r = await fetch(`${API_URL}/excel/sheets?path=${encodeURIComponent(path)}`);
-  if (!r.ok) throw new Error(`No se pudieron listar hojas (${r.status})`);
-  return r.json();
+export async function listExcelSheets(path: string, token: string) {
+  const url = `${API_URL}/excel/sheets?path=${encodeURIComponent(path)}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(`Sheets ${res.status} ${res.statusText} ${txt}`);
+  }
+  return res.json() as Promise<{ sheets: string[] }>;
 }
 
 export type PreviewResp = {
-  sheet: { name: string };
+  sheet?: { name: string }; // opcional si no lo devuelves
   columns: string[];
   rows: (string | number | null)[][];
   page: { offset: number; limit: number; total: number };
@@ -102,17 +106,23 @@ export type PreviewResp = {
 
 export async function previewExcel(
   path: string,
-  sheetName: string | number | undefined,
-  offset = 0,
-  limit = 50
-): Promise<PreviewResp> {
+  sheet_name: string | number,
+  offset: number,
+  limit: number,
+  token: string
+) {
   const params = new URLSearchParams({
     path,
-    sheet_name: String(sheetName ?? 0),
-    offset: String(offset),
-    limit: String(limit),
+    sheet_name: String(sheet_name ?? '0'),
+    offset: String(offset ?? 0),
+    limit: String(limit ?? 50),
   });
-  const r = await fetch(`${API_URL}/excel/preview?${params.toString()}`);
-  if (!r.ok) throw new Error(`No se pudo previsualizar (${r.status})`);
-  return r.json();
+  const res = await fetch(`${API_URL}/excel/preview?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(`Preview ${res.status} ${res.statusText} ${txt}`);
+  }
+  return res.json() as Promise<PreviewResp>;
 }

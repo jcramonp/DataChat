@@ -13,6 +13,7 @@ type Msg = {
   text: string;
   sql?: { type: 'sql' | 'pandas'; code: string } | null;
   table?: ChatResponse['table'] | null;
+  debug?: ChatResponse['debug'] | null;
 };
 
 type SourceType = 'mysql' | 'excel' | 'saved';
@@ -60,30 +61,30 @@ export default function MainPage() {
 
   //  US05: Cargar hojas Excel
   useEffect(() => {
-    if (source !== 'excel' || !excelPath) return;
-    setSheets([]);
-    setPreview(null);
-    setOffset(0);
+  if (source !== 'excel' || !excelPath || !auth?.token) return;
+  setSheets([]);
+  setPreview(null);
+  setOffset(0);
 
-    listExcelSheets(excelPath)
-      .then(({ sheets }) => {
-        setSheets(sheets);
-        const next = sheets?.length ? sheets[0] : 0;
-        setSheetName(prev => (prev && sheets.includes(String(prev)) ? prev : next));
-      })
-      .catch(() => setError(t("errors.excelSheets")));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, excelPath]);
+  listExcelSheets(excelPath, auth.token!)
+    .then(({ sheets }) => {
+      setSheets(sheets);
+      const next = sheets?.length ? sheets[0] : 0;
+      setSheetName(prev => (prev && sheets.includes(String(prev)) ? prev : next));
+    })
+    .catch(() => setError(t("errors.excelSheets")));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [source, excelPath, auth?.token]);
 
   //  US05: Previsualizar hoja
   useEffect(() => {
-    if (source !== 'excel' || !excelPath || sheetName === undefined || sheetName === null) return;
-    setError('');
-    previewExcel(excelPath, sheetName, offset, limit)
-      .then(r => setPreview({ columns: r.columns, rows: r.rows, total: r.page.total }))
-      .catch(() => setError(t("errors.excelPreview")));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, excelPath, sheetName, offset]);
+  if (source !== 'excel' || !excelPath || sheetName === undefined || sheetName === null || !auth?.token) return;
+  setError('');
+  previewExcel(excelPath, sheetName, offset, limit, auth.token!)
+    .then(r => setPreview({ columns: r.columns, rows: r.rows, total: r.page.total }))
+    .catch(() => setError(t("errors.excelPreview")));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [source, excelPath, sheetName, offset, auth?.token]);
 
   //  Enviar mensaje
   const handleSend = async (e: React.FormEvent) => {
@@ -127,9 +128,10 @@ export default function MainPage() {
 
       pushMessage({
         role: 'assistant',
-        text: resp.answer,
+        text: resp.answer_text,
         sql: resp.generated,
         table: resp.table ?? null,
+        debug: resp.debug ?? null,
       });
     } catch (err: any) {
       const msg = (err?.message || "").toLowerCase();
@@ -362,6 +364,88 @@ export default function MainPage() {
                     ) : null}
                   </details>
                 )}
+                {m.role === 'assistant' && m.debug && (
+  <details
+    style={{
+      marginTop: 8,
+      border: '1px solid #e5e7eb',
+      borderRadius: 10,
+      padding: 10,
+      background: '#f8fafc',
+    }}
+  >
+    <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
+      Debug (LLM / Plan / Código)
+    </summary>
+
+    <div style={{ marginTop: 10, display: 'grid', gap: 10, fontSize: 13 }}>
+      {m.debug.question && (
+        <div><b>Pregunta:</b> {m.debug.question}</div>
+      )}
+
+      {m.debug.columns && m.debug.columns.length > 0 && (
+        <div><b>Columnas:</b> {m.debug.columns.join(', ')}</div>
+      )}
+
+      {m.debug.dtypes && (
+        <div>
+          <b>Dtypes:</b>
+          <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>
+            {JSON.stringify(m.debug.dtypes, null, 2)}
+          </pre>
+        </div>
+      )}
+
+      {/* RAW del plan que devolvió el LLM (JSON crudo) */}
+      {m.debug.llm_raw_plan && (
+        <div>
+          <b>LLM RAW (Plan):</b>
+          <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>
+            {m.debug.llm_raw_plan}
+          </pre>
+        </div>
+      )}
+
+      {/* A veces también capturamos el RAW del generador de Pandas en fallback */}
+      {m.debug.llm_raw_pandas_expr && (
+        <div>
+          <b>LLM RAW (Pandas expr):</b>
+          <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>
+            {m.debug.llm_raw_pandas_expr}
+          </pre>
+        </div>
+      )}
+
+      {m.debug.plan_parsed && (
+        <div>
+          <b>Plan parseado:</b>
+          <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>
+            {JSON.stringify(m.debug.plan_parsed, null, 2)}
+          </pre>
+        </div>
+      )}
+
+      {m.debug.pandas_expr && (
+        <div>
+          <b>Pandas expr:</b>
+          <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>
+            {m.debug.pandas_expr}
+          </pre>
+        </div>
+      )}
+
+      {m.debug.exec_error && (
+        <div style={{ color: '#b91c1c' }}>
+          <b>Error de ejecución:</b>
+          <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>
+            {m.debug.exec_error}
+          </pre>
+        </div>
+      )}
+    </div>
+  </details>
+)}
+
               </div>
             ))}
             {loading && <div className="msg assistant">… {t("main.chat.thinking")}</div>}
