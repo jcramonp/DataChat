@@ -1,4 +1,3 @@
-// src/services/api.js
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 const TOKEN_KEY = "dc_token";
@@ -112,4 +111,33 @@ export async function previewExcel(path, sheetName, offset = 0, limit = 50) {
   const r = await fetch(`${API_URL}/excel/preview?${params.toString()}`);
   if (!r.ok) throw new Error(`No se pudo previsualizar la hoja (${r.status})`);
   return r.json(); // { sheet, columns, rows, page }
+}
+
+export async function listSessions() {
+  const { token } = getAuth();
+  const res = await fetch(`${API_URL}/admin/sessions`, {
+    headers: {
+      'Accept': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (res.status === 401) throw new Error("No autorizado");
+  if (res.status === 403) throw new Error("Solo admin");
+  if (!res.ok) throw new Error(`Error ${res.status}`);
+  return res.json(); // SessionOut[]
+}
+
+export async function revokeSession(jti) {
+  const { token } = getAuth();
+  const res = await fetch(`${API_URL}/admin/sessions/${jti}`, {
+    method: 'DELETE',
+    headers: {
+      'Accept': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (res.status === 401) throw new Error("No autorizado");
+  if (res.status === 403) throw new Error("Solo admin");
+  if (!res.ok) throw new Error(`Error ${res.status}`);
+  return res.json(); // {ok, jti}
 }
