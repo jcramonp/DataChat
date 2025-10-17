@@ -11,6 +11,9 @@ from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
+from fastapi import Query
+import openpyxl
+
 import jwt
 from jwt import PyJWTError
 
@@ -1494,3 +1497,47 @@ if __name__ == "__main__":
         print(
             "Crea ./empleados.csv con columnas: genero,salario,departamento … para la prueba rápida."
         )
+
+@app.get("/excel/sheets")
+def list_excel_sheets(path: str = Query(..., description="Ruta del archivo .xlsx accesible para el servidor")):
+    path_l = path.lower()
+    if not (path_l.endswith(".xlsx") or path_l.endswith(".xls")):
+        raise HTTPException(status_code=400, detail="Solo se listan hojas para archivos Excel (.xlsx/.xls)")
+
+    try:
+        wb = openpyxl.load_workbook(path, read_only=True)
+        names = wb.sheetnames
+        return {"path": path, "sheets": names}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Archivo no encontrado: {path}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"No se pudieron listar hojas: {e}")
+    
+@app.get("/excel/preview")
+def preview_excel(
+    path: str,
+    sheet_name: str | int | None = 0,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=500),
+):
+    try:
+        # lee solo la porción necesaria
+        # estrategia simple: leer toda la hoja y paginar en memoria (MVP)
+        df = pd.read_excel(path, sheet_name=sheet_name)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Archivo no encontrado: {path}")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Hoja inválida: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error leyendo Excel: {e}")
+
+    total = len(df)
+    cols = list(df.columns)
+    rows = df.iloc[offset: offset + limit].fillna("").values.tolist()
+
+    return {
+        "sheet": {"name": str(sheet_name)},
+        "columns": cols,
+        "rows": rows,
+        "page": {"offset": offset, "limit": limit, "total": int(total)},
+    }
