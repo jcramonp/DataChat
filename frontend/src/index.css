@@ -65,3 +65,205 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* ====== LIGHT MODE (para referencia rápida, mantenlo si ya lo tienes) ====== */
+body.light {
+  background-color: #ffffff;
+  color: #0f172a; /* casi negro azulado, mejor que #000 puro */
+}
+
+/* navbar clara */
+body.light .dc-nav {
+  background: radial-gradient(circle at top left, #ffffff 0%, #fafafa 60%, #f8fafc 100%);
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+  color: #0f172a;
+}
+
+/* pastillas en light */
+body.light .nav-pill {
+  background-color: rgba(0,0,0,0.05);
+  border: 1px solid rgba(0,0,0,0.08);
+  color: #0f172a;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  line-height: 1;
+  font-weight: 500;
+}
+
+body.light .nav-pill.active {
+  background: radial-gradient(circle at 30% 20%, #6d28d9 0%, #4f46e5 40%, #312e81 100%);
+  color: #fff;
+  border: 0;
+  box-shadow: 0 8px 24px rgba(99,102,241,0.45);
+}
+
+/* ====== DARK MODE (mejorado) ====== */
+body.dark {
+  background-color: #0a0f1e; /* un poquito más profundo que #0f172a */
+  color: #f8fafc;
+  /* tip: este fondo más oscuro hace que los paneles contrasten más bonito */
+}
+
+/* Navbar en dark:
+   - un bloque semitransparente con glassy feel,
+   - borde violeta muy suave,
+   - gradient sutil para que no sea un cuadrado plano.
+*/
+body.dark .dc-nav {
+  background: radial-gradient(circle at top left,
+    rgba(30, 27, 75, 0.6) 0%,      /* violeta profundo translúcido */
+    rgba(15, 23, 42, 0.6) 40%,     /* azul gris oscuro */
+    rgba(2, 6, 23, 0.4) 100%       /* casi negro con transparencia */
+  );
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+
+  border-bottom: 1px solid rgba(168, 85, 247, 0.25); /* borde violeta suave */
+  color: #f8fafc;
+  box-shadow:
+    0 20px 60px rgba(0,0,0,0.9),
+    0 2px 4px rgba(0,0,0,0.6);
+}
+
+/* Pills en dark:
+   - fondo translúcido gris/azul,
+   - borde violeta tenue,
+   - texto claro.
+*/
+body.dark .nav-pill {
+  background: rgba(30, 41, 59, 0.6); /* azul gris translúcido */
+  border: 1px solid rgba(148, 163, 184, 0.3); /* gris azulado sutil */
+  color: #e2e8f0;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  line-height: 1;
+  font-weight: 500;
+
+  box-shadow:
+    0 12px 32px rgba(0,0,0,0.8),
+    0 2px 4px rgba(0,0,0,0.5);
+}
+
+/* estado active / seleccionado en dark
+   - pastilla con glow violeta tipo "Main" que muestras en light
+*/
+body.dark .nav-pill.active {
+  background: radial-gradient(circle at 30% 20%,
+    rgba(168, 85, 247, 1) 0%,     /* violeta vivo */
+    rgba(99, 102, 241, 1) 40%,    /* indigo */
+    rgba(49, 46, 129, 0.9) 100%   /* indigo muy oscuro */
+  );
+  color: #fff;
+  border: 0;
+  box-shadow:
+    0 20px 60px rgba(168,85,247,0.55),
+    0 2px 6px rgba(0,0,0,0.8);
+}
+
+/* ====== Panels / tarjetas de contenido ======
+   Tus bloques "Connection", "chat box", etc.
+   Idealmente dales una clase común, ej: className="panel"
+   Si ya las tienes con otra clase (.panel, .dc-card, etc.), ajusta esta parte.
+*/
+body.light .panel {
+  background-color: #ffffff;
+  color: #0f172a;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,0.08);
+  box-shadow:
+    0 20px 40px rgba(0,0,0,0.04),
+    0 2px 4px rgba(0,0,0,0.06);
+}
+
+body.dark .panel {
+  background-color: rgba(15, 23, 42, 0.8);  /* azul gris oscuro translúcido */
+  color: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid rgba(168,85,247,0.18); /* un borde con tinte violeta */
+  box-shadow:
+    0 30px 80px rgba(0,0,0,0.9),
+    0 2px 6px rgba(0,0,0,0.8);
+}
+
+/* header interno de esos panels (título "Connection", botón "Show", etc.) */
+body.dark .panel-header {
+  color: #f8fafc;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+body.light .panel-header {
+  color: #0f172a;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+}
+
+/* Texto secundario / descripción */
+body.dark .muted {
+  color: #94a3b8; /* slate-400 */
+}
+
+body.light .muted {
+  color: #475569; /* slate-600 */
+}
+
+/* Inputs (el input donde escribes la pregunta, etc.)
+   Queremos que en dark no se vean como "una caja blanca gigante".
+*/
+body.dark input,
+body.dark textarea {
+  background-color: rgba(15, 23, 42, 0.9);
+  color: #f8fafc;
+  border: 1px solid rgba(148,163,184,0.3);
+  border-radius: 8px;
+}
+
+body.dark input::placeholder,
+body.dark textarea::placeholder {
+  color: rgba(226,232,240,0.4); /* texto placeholder clarito */
+}
+
+body.light input,
+body.light textarea {
+  background-color: #ffffff;
+  color: #0f172a;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 8px;
+}
+
+body.light input::placeholder,
+body.light textarea::placeholder {
+  color: rgba(0,0,0,0.4);
+}
+
+/* Botón principal tipo "Send"
+   Queremos que se vea coherente en dark.
+*/
+body.dark button.primary {
+  background: radial-gradient(circle at 30% 20%,
+    rgba(168, 85, 247, 1) 0%,
+    rgba(99, 102, 241, 1) 40%,
+    rgba(49, 46, 129, 0.9) 100%
+  );
+  color: #fff;
+  border: 0;
+  border-radius: 10px;
+  box-shadow:
+    0 20px 60px rgba(168,85,247,0.55),
+    0 2px 6px rgba(0,0,0,0.8);
+}
+
+body.light button.primary {
+  background: radial-gradient(circle at 30% 20%,
+    #6d28d9 0%,
+    #4f46e5 40%,
+    #312e81 100%
+  );
+  color: #fff;
+  border: 0;
+  border-radius: 10px;
+  box-shadow:
+    0 12px 32px rgba(99,102,241,0.45),
+    0 2px 4px rgba(0,0,0,0.4);
+}
+

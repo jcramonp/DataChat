@@ -1,12 +1,12 @@
- import { useState, useEffect } from 'react';
- import { askData, listExcelSheetsById, previewExcelById, uploadExcel } from '../services/api';
- import type { ChatResponse } from '../services/api';
- import './MainPage.css';
- import { useAuth } from '../auth/AuthContext';
- import ConnectionCard from "../components/ConnectionCard";
- import { useNavigate } from 'react-router-dom';
- import { useTranslation } from "react-i18next";
- import DataTable from '../components/DataTable';
+import { useState, useEffect } from 'react';
+import { askData, listExcelSheetsById, previewExcelById, uploadExcel } from '../services/api';
+import type { ChatResponse } from '../services/api';
+import './MainPage.css';
+import { useAuth } from '../auth/AuthContext';
+import ConnectionCard from "../components/ConnectionCard";
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from "react-i18next";
+import DataTable from '../components/DataTable';
 
 type Msg = {
   role: 'user' | 'assistant';
@@ -68,13 +68,13 @@ export default function MainPage() {
     setOffset(0);
 
     listExcelSheetsById(excelFileId, auth.token ?? '')
-        .then(({ sheets }) => {
-          setSheets(sheets);
-          const next = sheets?.length ? sheets[0] : 0;
-          setSheetName(prev => (prev && sheets.includes(String(prev)) ? prev : next));
-        })
-        .catch(() => setError(t("errors.excelSheets")));
-    }, [source, excelFileId]);
+      .then(({ sheets }) => {
+        setSheets(sheets);
+        const next = sheets?.length ? sheets[0] : 0;
+        setSheetName(prev => (prev && sheets.includes(String(prev)) ? prev : next));
+      })
+      .catch(() => setError(t("errors.excelSheets")));
+  }, [source, excelFileId]);
 
   //  US05: Previsualizar hoja
   useEffect(() => {
@@ -85,7 +85,6 @@ export default function MainPage() {
       .catch(() => setError(t("errors.excelPreview")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, excelFileId, sheetName, offset]);
-
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,7 +98,7 @@ export default function MainPage() {
       return;
     }
     if (source === 'excel' && !excelFileId) {
-      setError(t("errors.missingExcelPath")); // puedes crear un texto específico "Selecciona un archivo"
+      setError(t("errors.missingExcelPath"));
       return;
     }
     if (source === 'saved' && (connectionId === '' || isNaN(Number(connectionId)))) {
@@ -234,82 +233,161 @@ export default function MainPage() {
 
       {/* CHAT */}
       <section className="container mt-16">
-        <div className="chat-card">
-          <div className="chat-header">
-            <h3>{t("main.chat.title", "DataChat Assistant")}</h3>
-            <div className="chat-actions">
-              <button type="button" title={t("common.newChat")} onClick={() => setMessages([])}>
+        {/* 👇 aquí aplicamos el theming */}
+        <div
+          className="chat-card panel"
+          style={{
+            borderRadius: "12px",
+          }}
+        >
+          <div
+            className="chat-header panel-header"
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              padding: "12px 16px",
+              fontWeight: 500,
+              fontSize: "16px",
+              lineHeight: 1.4,
+            }}
+          >
+            <h3 style={{ margin: 0 }}>
+              {t("main.chat.title", "DataChat Assistant")}
+            </h3>
+
+            <div
+              className="chat-actions"
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "8px",
+                alignItems: "center",
+              }}
+            >
+              {/* limpiar conversación */}
+              <button
+                type="button"
+                title={t("common.newChat")}
+                onClick={() => setMessages([])}
+                style={{
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "6px 12px",
+                  cursor: "pointer",
+                  background: "transparent",
+                  fontWeight: 600,
+                  fontSize: "14px",
+                  lineHeight: 1.3,
+                  color: "rgb(168,85,247)", // violeta visible en ambos temas
+                }}
+              >
                 ＋
               </button>
 
-              {/* NEW: botón Historial dentro del chat */}
+              {/* Botón Historial */}
               <button
                 type="button"
                 title="Ver historial"
                 onClick={() => navigate('/history')}
                 style={{
-                  border: 'none',
+                  border: "none",
                   borderRadius: 8,
-                  padding: '6px 12px',
-                  cursor: 'pointer',
-                  background: '#f0ecfb',
-                  color: '#5a49d6',
+                  padding: "6px 12px",
+                  cursor: "pointer",
                   fontWeight: 600,
+                  fontSize: "14px",
+                  lineHeight: 1.3,
+
+                  /* estilos dependientes de tema via CSS global:
+                     vamos a dar clases que luego podrás estilizar si quieres */
                 }}
+                className="nav-pill"
               >
                 Historial
               </button>
             </div>
 
+            {/* Bloque de subida Excel (solo si source === 'excel') */}
             {source === 'excel' && (
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 12px' }}>
-                  <input
-                      id="excel-file-input"
-                      type="file"
-                      accept=".xlsx,.xls,.csv"
-                      style={{ display: 'none' }}
-                      onChange={async (e) => {
-                        const inputEl = e.currentTarget as HTMLInputElement;
-                        const file = inputEl.files?.[0];
-                        if (!file) return;
-                        setError('');
-                        setUploading(true);
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 8,
+                  alignItems: 'center',
+                  padding: '8px 12px',
+                  width: "100%",
+                }}
+              >
+                <input
+                  id="excel-file-input"
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  style={{ display: 'none' }}
+                  onChange={async (e) => {
+                    const inputEl = e.currentTarget as HTMLInputElement;
+                    const file = inputEl.files?.[0];
+                    if (!file) return;
+                    setError('');
+                    setUploading(true);
 
-                        try {
-                          if (!auth.token) {
-                            setError(t("errors.unauthorized"));
-                            return;
-                          }
-                          const res = await uploadExcel(file, auth.token);
-                          setExcelFileId(res.file_id);
-                          setExcelPath(file.name);
-                        } catch (err) {
-                          setError(t("errors.excelUpload") || "Error al subir el archivo");
-                        } finally {
-                          setUploading(false);
-                          inputEl.value = '';
-                        }
-                      }}
-                  />
-                  <button
-                      type="button"
-                      onClick={() => document.getElementById('excel-file-input')?.click()}
-                      className="btn-secondary"
-                      disabled={uploading}
+                    try {
+                      if (!auth.token) {
+                        setError(t("errors.unauthorized"));
+                        return;
+                      }
+                      const res = await uploadExcel(file, auth.token);
+                      setExcelFileId(res.file_id);
+                      setExcelPath(file.name);
+                    } catch (err) {
+                      setError(t("errors.excelUpload") || "Error al subir el archivo");
+                    } finally {
+                      setUploading(false);
+                      inputEl.value = '';
+                    }
+                  }}
+                />
+
+                <button
+                  type="button"
+                  onClick={() => document.getElementById('excel-file-input')?.click()}
+                  className="nav-pill"
+                  disabled={uploading}
+                  style={{
+                    cursor: "pointer",
+                    fontWeight: 600,
+                    fontSize: "14px",
+                    lineHeight: 1.3,
+                  }}
+                >
+                  {uploading
+                    ? t("common.uploading", "Subiendo…")
+                    : t("common.upload", "Subir Excel")}
+                </button>
+
+                {excelPath ? (
+                  <span style={{ opacity: 0.8 }}>{excelPath}</span>
+                ) : null}
+
+                {excelFileId ? (
+                  <span
+                    style={{
+                      marginLeft: 'auto',
+                      fontSize: 12,
+                      opacity: 0.7,
+                    }}
                   >
-                    {uploading ? t("common.uploading", "Subiendo…") : t("common.upload", "Subir Excel")}
-                  </button>
-                  {excelPath ? <span style={{ opacity: 0.8 }}>{excelPath}</span> : null}
-                  {excelFileId ? (
-                      <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.7 }}>
-                        id: {excelFileId.slice(0, 8)}…
-                      </span>
-                  ) : null}
-                </div>
+                    id: {excelFileId.slice(0, 8)}…
+                  </span>
+                ) : null}
+              </div>
             )}
           </div>
 
-          <div className="chat-messages">
+          {/* Mensajes */}
+          <div className="chat-messages" style={{ padding: "16px" }}>
             {messages.map((m, idx) => (
               <div key={idx + m.text} className={`msg ${m.role}`}>
                 <div>{m.text}</div>
@@ -346,52 +424,102 @@ export default function MainPage() {
                     <button
                       type="button"
                       onClick={async () => navigator.clipboard.writeText(m.sql!.code)}
+                      className="nav-pill"
                       style={{
                         marginTop: 6,
-                        border: 'none',
-                        borderRadius: 8,
-                        padding: '6px 12px',
-                        cursor: 'pointer',
-                        background: '#f0ecfb',
-                        color: '#5a49d6',
                         fontWeight: 600,
+                        fontSize: "14px",
+                        lineHeight: 1.3,
+                        cursor: "pointer",
                       }}
                     >
                       {t("common.copy")}
                     </button>
+
                     {m.table ? (
-                        m.table.columns?.length && m.table.rows?.length ? (
-                            <div style={{ marginTop: 12 }}>
-                              <DataTable
-                                  columns={m.table.columns}
-                                  rows={m.table.rows as any[][]}
-                                  defaultPageSize={10}
-                                  pageSizeOptions={[5, 10, 20, 50, 100]}
-                                  className="dt-embedded"
-                              />
-                            </div>
-                        ) : (
-                            <div style={{ marginTop: 12, opacity: 0.75 }}>
-                              {t("common.noData", "Sin datos para mostrar")}
-                            </div>
-                        )
+                      m.table.columns?.length && m.table.rows?.length ? (
+                        <div style={{ marginTop: 12 }}>
+                          <DataTable
+                            columns={m.table.columns}
+                            rows={m.table.rows as any[][]}
+                            defaultPageSize={10}
+                            pageSizeOptions={[5, 10, 20, 50, 100]}
+                            className="dt-embedded"
+                          />
+                        </div>
+                      ) : (
+                        <div style={{ marginTop: 12, opacity: 0.75 }}>
+                          {t("common.noData", "Sin datos para mostrar")}
+                        </div>
+                      )
                     ) : null}
                   </details>
                 )}
               </div>
             ))}
-            {loading && <div className="msg assistant">… {t("main.chat.thinking")}</div>}
+
+            {loading && (
+              <div className="msg assistant">
+                … {t("main.chat.thinking")}
+              </div>
+            )}
           </div>
 
-          {error && <div className="error">{error}</div>}
+          {error && (
+            <div
+              className="error"
+              style={{
+                padding: "0 16px 16px 16px",
+                color: "rgb(239,68,68)",
+                fontSize: "0.9rem",
+                fontWeight: 500,
+              }}
+            >
+              {error}
+            </div>
+          )}
 
-          <form onSubmit={handleSend} className="chat-input">
+          {/* Input / Send */}
+          <form
+            onSubmit={handleSend}
+            className="chat-input"
+            style={{
+              display: "flex",
+              gap: "8px",
+              alignItems: "flex-start",
+              padding: "16px",
+              borderTop: "1px solid rgba(0,0,0,0.08)",
+            }}
+          >
             <input
               value={input}
               onChange={e => setInput(e.target.value)}
               placeholder={t("main.chat.placeholder")}
+              style={{
+                flex: 1,
+                padding: "10px 12px",
+                borderRadius: "8px",
+                border: "1px solid transparent",
+                fontSize: "14px",
+                lineHeight: 1.4,
+              }}
             />
-            <button type="submit" className="btn-primary"   disabled={loading}>
+
+            {/* este botón adopta el gradiente morado según el tema */}
+            <button
+              type="submit"
+              className="primary"
+              style={{
+                padding: "10px 14px",
+                borderRadius: "8px",
+                fontSize: "14px",
+                fontWeight: 500,
+                lineHeight: 1.4,
+                minWidth: "72px",
+                cursor: "pointer",
+              }}
+              disabled={loading}
+            >
               {loading ? t("main.chat.sending") : t("main.chat.send")}
             </button>
           </form>
