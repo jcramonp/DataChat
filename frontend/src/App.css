@@ -41,7 +41,6 @@
   color: #888;
 }
 
-/* utilidades globales */
 .container {
   max-width: 1100px;
   margin: 0 auto;
@@ -57,7 +56,6 @@
   margin-top: 32px;
 }
 
-/* Header de la tarjeta de conexión */
 .conn-header {
   display: flex;
   justify-content: space-between;
@@ -65,7 +63,6 @@
   margin-bottom: 6px;
 }
 
-/* Botón mostrar/ocultar */
 .toggle-btn {
   border: none;
   background: #f0ecfb;
@@ -76,7 +73,6 @@
   cursor: pointer;
 }
 
-/* Cuerpo colapsable con animación */
 .conn-body {
   overflow: hidden;
   max-height: 0;
@@ -86,8 +82,34 @@
     opacity 200ms ease;
 }
 
-/* Cuando está abierto */
 .conn-body.open {
-  max-height: 1200px; /* suficientemente grande para el contenido */
+  max-height: 1200px;
   opacity: 1;
+}
+
+
+.btn-primary {
+  display: inline-block;
+  width: 100%;
+  padding: 14px 24px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #4b6bff, #f18be2);
+  cursor: pointer;
+  box-shadow: 0 6px 12px rgba(100, 80, 200, 0.25);
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 8px 16px rgba(100, 80, 200, 0.3);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
 }

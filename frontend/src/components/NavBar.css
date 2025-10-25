@@ -1,23 +1,35 @@
+:root {
+  --nav-height: 72px;
+  --nav-pad-x: 24px;
+}
+
 .dc-nav {
-  background: transparent;
+  background: #ffffff;
   position: sticky;
   top: 0;
   z-index: 50;
+  box-shadow: 0 1px 0 rgba(20, 30, 60, 0.06);
 }
 
 .nav-inner {
+  height: var(--nav-height);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-block: 10px;
+  padding: 0 var(--nav-pad-x);
+}
+
+.dc-brand svg {
+  width: 40px !important;
+  height: 40px !important;
 }
 
 .dc-tabs {
   display: flex;
-  gap: 10px;
+  gap: 14px;
   background: #ece7f5;
-  padding: 6px;
-  border-radius: 20px;
+  padding: 8px 10px;
+  border-radius: 24px;
 }
 
 .brand-pill {
@@ -35,10 +47,11 @@
 }
 
 .nav-pill {
-  padding: 8px 14px;
-  border-radius: 16px;
+  padding: 10px 18px;
+  border-radius: 20px;
   text-decoration: none;
   font-weight: 600;
+  font-size: 15px;
   color: #40455b;
   background: #fff;
 }

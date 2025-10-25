@@ -52,7 +52,7 @@ export default function AdminUsers() {
           <option value="user">Usuario</option>
           <option value="admin">Administrador</option>
         </select>
-        <button type="submit">Crear usuario</button>
+        <button type="submit" className="btn-primary">Crear usuario</button>
         {msg && (
           <div
             style={{

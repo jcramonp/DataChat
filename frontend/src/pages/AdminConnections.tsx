@@ -104,7 +104,7 @@ export default function AdminConnections() {
           • PostgreSQL: <code>postgresql+psycopg2://user:pass@localhost:5432/mi_db</code>
         </small>
 
-        <button type="submit">Guardar y validar</button>
+        <button type="submit" className="btn-primary">Guardar y validar</button>
 
         {msg && (
           <div style={{ color: msg.startsWith("✅") ? "#16a34a" : "#b00020" }}>{msg}</div>

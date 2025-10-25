@@ -1,0 +1,129 @@
+{
+  "landing": {
+    "title": "Query your data. No SQL. No formulas",
+    "subtitle": "Convert Spanish and English questions to database queries instantly. Get clear answers without technical knowledge.",
+    "cta": "Start Now"
+  },
+  "login": {
+    "title": "Login",
+    "email": "email",
+    "password": "password",
+    "submit": "Sign in",
+    "errorGeneric": "Login error"
+  },
+  "nav": {
+    "home": "Home",
+    "admin": "Admin",
+    "main": "Main",
+    "login": "Login",
+    "logout": "Logout"
+  },
+  "language": "Language",
+  "session": {
+    "signedIn": "Signed in ({{role}})",
+    "signedOut": "You are not signed in"
+  },
+  "common": {
+    "show": "Show",
+    "hide": "Hide",
+    "viewQuery": "View query",
+    "copy": "Copy",
+    "newChat": "New Chat",
+    "loading": "Loading…"
+  },
+  "errors": {
+    "backend": "Error contacting the backend.",
+    "unauthorized": "Unauthorized (invalid JWT). Please sign in again.",
+    "forbidden": "You don't have permission.",
+    "not_found": "Resource not found.",
+    "network": "Network error. Check your connection.",
+    "excelSheets": "Could not load Excel sheets.",
+    "excelPreview": "Could not preview the selected sheet.",
+    "missingSqlUrl": "You must provide the SQLAlchemy URL for MySQL.",
+    "missingExcelPath": "You must provide the Excel path on the server.",
+    "invalidConnectionId": "You must provide a valid numeric Connection ID."
+  },
+  "connection": {
+    "source": "Data source",
+    "sourceAria": "Select the data source",
+    "sources": {
+      "mysql": "MySQL",
+      "excel": "Excel",
+      "admin": "Admin DB"
+    }
+  },
+  "history": {
+    "title": "Query History",
+    "clear": "Clear history",
+    "empty": "No queries yet.",
+    "rows": "rows",
+    "viewAnswer": "View answer",
+    "hideAnswer": "Hide answer",
+    "notSaved": "Answer not saved in this item.",
+    "generatedCode": "Generated code",
+    "noContent": "No content",
+    "datasource": "Datasource",
+    "errors": {
+      "tokenExpired": "Session expired. Please log in again.",
+      "loadGeneric": "Could not load history. Try again.",
+      "clearGeneric": "Could not clear history. Try again."
+    }
+  },
+  "main": {
+    "connection": { "title": "Connection" },
+    "labels": {
+      "sqlalchemyUrl": "SQLAlchemy URL",
+      "excelPath": "Excel path (server-visible)",
+      "sheet": "Sheet:",
+      "rows": "rows",
+      "connectionId": "Connection ID",
+      "savedAdmin": "Saved (admin)"
+    },
+    "chat": {
+      "placeholder": "Ask me anything about your data…",
+      "send": "Send",
+      "sending": "Sending…",
+      "thinking": "DataChat is thinking…",
+      "title": "DataChat Assistant"
+    },
+    "mysql": { "placeholder": "mysql+pymysql://user:pass@host:3306/db" },
+    "excel": { "placeholder": "C:/data/employees.xlsx" },
+    "saved": { "placeholder": "Connection ID" },
+    "suggestions": {
+      "q1": "How many employees joined this year?",
+      "q2": "Show me sales by region",
+      "q3": "Which customers have the highest orders?"
+    }
+  },
+  "nav2": { "faq": "FAQ" },
+  "faq": {
+    "title": "Frequently Asked Questions",
+    "intro": "Quick answers to the most common questions about DataChat.",
+    "items": [
+      {
+        "q": "I see “Unauthorized (invalid JWT)”. What do I do?",
+        "a": "Your session expired. Log out and sign in again from the Login page."
+      },
+      {
+        "q": "How do I connect to MySQL?",
+        "a": "Open the Connection panel, choose MySQL, and paste a valid SQLAlchemy URL (e.g., mysql+pymysql://user:pass@host:3306/db)."
+      },
+      {
+        "q": "How do I query an Excel file?",
+        "a": "Choose Excel, enter the server-visible path (e.g., C:/data/employees.xlsx), select a sheet, and then ask your question."
+      },
+      {
+        "q": "Why do I get “Error contacting the backend”?",
+        "a": "The API may be down or blocked by CORS. Ensure the FastAPI server is running and CORS allows http://localhost:5173."
+      },
+      {
+        "q": "How do I change the app language?",
+        "a": "Use the language selector in the top bar or in the Connection panel. Your choice is saved automatically."
+      },
+      {
+        "q": "How many rows are returned?",
+        "a": "By default we limit results (e.g., max_rows: 200). You can adjust this in the request options."
+      }
+    ]
+  }
+}

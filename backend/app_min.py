@@ -1,12 +1,17 @@
 from __future__ import annotations
-import os, json, re
+import uuid
+
+import os, json, re, unicodedata
 from typing import Any, Dict, List, Optional, Tuple, Literal, Union, Annotated
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
+import sqlite3
+import os, shutil, pathlib
 
-from fastapi import FastAPI, Depends, HTTPException, status, Depends
+from fastapi import FastAPI, Depends, HTTPException, status, Path, UploadFile, File, Depends, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import StrOutputParser
@@ -21,14 +26,125 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.sql import func
 from sqlalchemy.engine import Engine
 
-from cryptography.fernet import Fernet, InvalidToken
-
 import pandas as pd
 from dotenv import load_dotenv
 from passlib.context import CryptContext
-
 from fastapi import Query
 import openpyxl
+from time import time
+
+# ========= HistoryStore (inlined) =========
+class HistoryStore:
+    def __init__(self, db_path: str = "./backend/history.db") -> None:
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        self.db_path = db_path
+        self._ensure_schema()
+
+    def _conn(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def _ensure_schema(self) -> None:
+        with self._conn() as cx:
+            # tabla base (si no existe)
+            cx.execute(
+                """
+                CREATE TABLE IF NOT EXISTS query_history (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  user_id TEXT NOT NULL,
+                  question TEXT NOT NULL,
+                  datasource_json TEXT NOT NULL,
+                  generated_type TEXT NOT NULL,
+                  generated_code TEXT NOT NULL,
+                  row_count INTEGER NOT NULL,
+                  created_at TEXT NOT NULL
+                )
+                """
+            )
+            # 👇 migración suave: agregar answer_text si falta
+            cols = [r["name"] for r in cx.execute("PRAGMA table_info(query_history)")]
+            if "answer_text" not in cols:
+                cx.execute("ALTER TABLE query_history ADD COLUMN answer_text TEXT NOT NULL DEFAULT ''")
+
+    def add(
+        self,
+        *,
+        user_id: str,
+        question: str,
+        datasource: Dict[str, Any],
+        generated: Dict[str, Any],
+        row_count: int,
+        answer_text: str = "",
+        created_at: Optional[str] = None,
+    ) -> int:
+        if created_at is None:
+            created_at = datetime.now(timezone.utc).isoformat()
+        with self._conn() as cx:
+            cur = cx.execute(
+                """
+                INSERT INTO query_history
+                  (user_id, question, datasource_json, generated_type, generated_code, row_count, created_at, answer_text)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    user_id,
+                    question,
+                    json.dumps(datasource, ensure_ascii=False),
+                    str(generated.get("type", "")),
+                    str(generated.get("code", "")),
+                    int(row_count),
+                    created_at,
+                    answer_text or "",
+                ),
+            )
+            return int(cur.lastrowid)
+
+    def list(
+        self, *, user_id: str, limit: int = 100, offset: int = 0
+    ) -> List[Dict[str, Any]]:
+        with self._conn() as cx:
+            rows = cx.execute(
+                """
+                SELECT id, user_id, question, datasource_json, generated_type, generated_code, row_count, created_at, answer_text
+                FROM query_history
+                WHERE user_id = ?
+                ORDER BY datetime(created_at) DESC
+                LIMIT ? OFFSET ?
+                """,
+                (user_id, limit, offset),
+            ).fetchall()
+            out: List[Dict[str, Any]] = []
+            for r in rows:
+                out.append(
+                    {
+                        "id": r["id"],
+                        "user_id": r["user_id"],
+                        "question": r["question"],
+                        "datasource": json.loads(r["datasource_json"]),
+                        "generated": {
+                            "type": r["generated_type"],
+                            "code": r["generated_code"],
+                        },
+                        "row_count": r["row_count"],
+                        "created_at": r["created_at"],
+                        "answer_text": r["answer_text"],
+                    }
+                )
+            return out
+
+    def clear(self, *, user_id: str) -> int:
+        with self._conn() as cx:
+            cur = cx.execute("DELETE FROM query_history WHERE user_id = ?", (user_id,))
+            return int(cur.rowcount)
+
+    # (si ya agregaste count() antes)
+    def count(self, *, user_id: str) -> int:
+        with self._conn() as cx:
+            row = cx.execute(
+                "SELECT COUNT(*) AS c FROM query_history WHERE user_id = ?", (user_id,)
+            ).fetchone()
+            return int(row["c"]) if row else 0
 
 # ========= Env & App =========
 load_dotenv()
@@ -51,24 +167,58 @@ pwd_ctx = CryptContext(schemes=["argon2"], deprecated="auto")
 
 auth_scheme = HTTPBearer(auto_error=True)
 
-# ========= Persistencia de usuarios (SQLite) =========
-DB_URL = os.getenv("AUTH_DB_URL", "sqlite:///./auth.db")
+class SessionOut(BaseModel):
+    jti: str
+    sub: str
+    role: str
+    issued_at: int
+    expires_at: int
+    last_seen: int
+    revoked: bool = False
+
+SESSIONS: dict[str, dict] = {}
+
 
 def require_jwt(credentials: HTTPAuthorizationCredentials = Depends(auth_scheme)) -> dict:
     token = credentials.credentials
     try:
-        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expirado")
-    except (jwt.InvalidTokenError, PyJWTError) as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Token inválido: {e}")
+        raise HTTPException(status_code=401, detail="Token expirado")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Token inválido")
+
+    jti = payload.get("jti")
+    s = SESSIONS.get(jti)
+    if not s or s.revoked:
+        raise HTTPException(status_code=401, detail="Sesión inválida o revocada")
+
+    s.last_seen = int(datetime.now(tz=timezone.utc).timestamp())
+    SESSIONS[jti] = s
+    return payload
+
+
+def require_non_admin(token: HTTPAuthorizationCredentials = Depends(auth_scheme)):
+    try:
+        payload = jwt.decode(token.credentials, JWT_SECRET, algorithms=["HS256"])
+    except PyJWTError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+
+    role = (payload.get("role") or payload.get("rol") or payload.get("perfil") or "").lower()
+
+    if role == "admin":
+        raise HTTPException(status_code=403, detail="Admins cannot use the chatbot")
+    return payload
 
 def create_jwt(sub: str, role: str, extra: dict | None = None) -> str:
+    now = int(datetime.now(tz=timezone.utc).timestamp())
+    exp = int((datetime.now(tz=timezone.utc) + timedelta(minutes=JWT_EXPIRE_MINUTES)).timestamp())
     payload = {
         "sub": sub,
         "role": role,
-        "iat": int(datetime.now(tz=timezone.utc).timestamp()),
-        "exp": int((datetime.now(tz=timezone.utc) + timedelta(minutes=JWT_EXPIRE_MINUTES)).timestamp()),
+        "iat": now,
+        "exp": exp,
+        "jti": str(uuid4()),   # 👈 ahora sí existe
     }
     if extra:
         payload.update(extra)
@@ -84,8 +234,68 @@ def require_roles(roles: list[str]):
         return user
     return _dep
 
+
+def _safe_int(v):
+    # intenta convertir a int; si no se puede, devuelve None
+    try:
+        if v is None:
+            return None
+        return int(v)
+    except Exception:
+        return None
+
+@app.get("/admin/sessions")
+def admin_list_sessions(_: dict = Depends(require_roles(["admin"]))):
+    """
+    Lista sesiones activas (revocadas o no) con metadata útil.
+    Siempre devuelve timestamps numéricos o None.
+    """
+    now = int(time())
+    out = []
+
+    for jti, s in SESSIONS.items():
+        issued = getattr(s, "issued_at", None)
+        exp    = getattr(s, "expires_at", None)
+        seen   = getattr(s, "last_seen", None)
+
+        out.append({
+            "jti": s.jti,
+            "sub": s.sub,
+            "role": s.role,
+            "issued_at": _safe_int(issued),
+            "expires_at": _safe_int(exp),
+            "last_seen": _safe_int(seen),
+            "revoked": bool(getattr(s, "revoked", False)),
+            "expired": ( _safe_int(exp) is not None and now > _safe_int(exp) ),
+        })
+
+    return {
+        "items": out,
+        "total": len(out),
+    }
+
+@app.delete("/admin/sessions/{jti}")
+def admin_revoke_session(
+    jti: str,
+    _: dict = Depends(require_roles(["admin"])),
+):
+    """
+    Marca una sesión como revocada en memoria.
+    """
+    s = SESSIONS.get(jti)
+    if not s:
+        raise HTTPException(status_code=404, detail="Sesión no encontrada")
+
+    # s es un SessionOut, no un dict
+    s.revoked = True
+    SESSIONS[jti] = s
+
+    return {"ok": True, "jti": jti}
+
+
 # ========= Persistencia de usuarios (SQLite) =========
 DB_URL = os.getenv("AUTH_DB_URL", "sqlite:///./auth.db")
+history_store = HistoryStore("./backend/history.db")
 engine = create_engine(DB_URL, connect_args={"check_same_thread": False} if DB_URL.startswith("sqlite") else {})
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
@@ -94,14 +304,14 @@ class User(Base):
     __tablename__ = "users"
     email = Column(String, primary_key=True, index=True)
     password_hash = Column(String, nullable=False)
-    role = Column(String, default="user")  # "user" | "admin"
+    role = Column(String, default="user")
     is_active = Column(Boolean, default=True)
 
 class Connection(Base):
     __tablename__ = "connections"
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, unique=True, nullable=False, index=True)
-    db_type = Column(String, nullable=False)  # "mysql" | "postgres" | "sqlite"
+    db_type = Column(String, nullable=False)
     sqlalchemy_url = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
     created_by = Column(String, nullable=True)
@@ -118,7 +328,6 @@ def get_db():
         db.close()
 
 def seed_admin():
-    """Crea el admin por defecto si no existe."""
     db = SessionLocal()
     try:
         email = "admin@datac.chat"
@@ -164,8 +373,24 @@ def auth_login(req: LoginRequest, db: Session = Depends(get_db)):
     u = db.get(User, email)
     if not u or not u.is_active or not pwd_ctx.verify(req.password, u.password_hash):
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
-    token = create_jwt(sub=u.email, role=u.role)
+
+    token = create_jwt(sub=email, role=u.role)
+
+    # registrar sesión en memoria
+    payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+    jti = payload["jti"]
+    now = payload["iat"]
+    SESSIONS[jti] = SessionOut(
+        jti=jti,
+        sub=payload["sub"],
+        role=payload["role"],
+        issued_at=payload["iat"],
+        expires_at=payload["exp"],
+        last_seen=now,
+        revoked=False,
+    )
     return {"access_token": token, "token_type": "bearer", "role": u.role}
+
 
 @app.post("/auth/register")
 def auth_register(req: RegisterRequest, _: dict = Depends(require_roles(["admin"])), db: Session = Depends(get_db)):
@@ -179,6 +404,15 @@ def auth_register(req: RegisterRequest, _: dict = Depends(require_roles(["admin"
 @app.get("/auth/me")
 def auth_me(user=Depends(get_current_user)):
     return user
+
+@app.post("/auth/logout")
+def auth_logout(payload: dict = Depends(require_jwt)):
+    jti = payload.get("jti")
+    s = SESSIONS.get(jti)
+    if s:
+        s.revoked = True
+        SESSIONS[jti] = s
+    return {"ok": True}
 
 @app.get("/admin/ping")
 def admin_ping(_: dict = Depends(require_roles(["admin"]))):
@@ -206,15 +440,12 @@ def admin_create_connection(
 ):
     if _dialect_from_url(req.sqlalchemy_url) != req.db_type:
         raise HTTPException(status_code=400, detail="db_type no coincide con la URL")
-
     try:
         _validate_connection(req.sqlalchemy_url)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"No se pudo conectar: {e}")
-
     if db.query(Connection).filter_by(name=req.name).first():
         raise HTTPException(status_code=400, detail="Ya existe una conexión con ese nombre")
-
     conn = Connection(
         name=req.name,
         db_type=req.db_type,
@@ -230,10 +461,70 @@ def admin_create_connection(
 def admin_list_connections(_: dict = Depends(require_roles(["admin"])), db: Session = Depends(get_db)):
     return db.query(Connection).order_by(Connection.id.desc()).all()
 
+
 print("[boot] app_min desde:", __file__)
 print("[exec_pandas] v2 cargada (sin locals())")
 
 import json, re, unicodedata
+
+
+UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "./uploads")
+MAX_FILE_MB = int(os.environ.get("MAX_FILE_MB", "25"))
+ALLOWED_EXTS = {".xlsx", ".xls", ".csv"}
+
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+def _save_upload_to_disk(up: UploadFile) -> dict:
+    ext = pathlib.Path(up.filename or "").suffix.lower()
+    if ext not in ALLOWED_EXTS:
+        raise HTTPException(status_code=400, detail=f"Extensión no permitida: {ext}")
+
+    file_id = str(uuid.uuid4())
+    server_path = os.path.join(UPLOAD_DIR, f"{file_id}{ext}")
+
+    # Medir tamaño mientras copiamos (streaming)
+    size = 0
+    with open(server_path, "wb") as out:
+        while True:
+            chunk = up.file.read(1024 * 1024)
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > MAX_FILE_MB * 1024 * 1024:
+                try:
+                    out.close()
+                    os.remove(server_path)
+                except Exception:
+                    pass
+                raise HTTPException(status_code=413, detail="Archivo demasiado grande")
+            out.write(chunk)
+
+    return {
+        "file_id": file_id,
+        "server_path": server_path,
+        "filename": up.filename,
+        "size_bytes": size,
+        "mime": up.content_type or "application/octet-stream",
+    }
+
+def _path_from_file_id(file_id: str) -> str:
+    # Busca cualquier extensión válida para ese file_id
+    for ext in ALLOWED_EXTS:
+        p = os.path.join(UPLOAD_DIR, f"{file_id}{ext}")
+        if os.path.exists(p):
+            return p
+    raise HTTPException(status_code=404, detail="file_id no encontrado")
+
+@app.post("/files/upload")
+def upload_file(file: UploadFile = File(...), user=Depends(require_non_admin)):
+    meta = _save_upload_to_disk(file)
+    # (Opcional) registrar en tu store/BD si quieres TTL/limpieza
+    return {
+        "file_id": meta["file_id"],
+        "filename": meta["filename"],
+        "size_bytes": meta["size_bytes"],
+        "mime": meta["mime"],
+    }
 
 
 def _unwrap_code_block(s: str) -> str:
@@ -544,19 +835,50 @@ except Exception as _e:
 # =========================
 
 # --- helpers de normalización ---
-_ALIAS_MAP = {
-    "eq": "==",
-    "ne": "!=",
-    "gt": ">",
-    "gte": ">=",
-    "lt": "<",
-    "lte": "<=",
+_ALIAS_MAP: Dict[str, str] = {
+# Comparadores
+    "==": "==", "=": "==", "eq": "==",
+    "!=": "!=", "<>": "!=", "neq": "!=", "ne": "!=",
+    ">": ">", "gt": ">",
+    ">=": ">=", "=>": ">=", "gte": ">=",
+    "<": "<", "lt": "<",
+    "<=": "<=", "=<": "<=", "lte": "<=",
+
+    # Conjuntos
+    "in": "in", "∈": "in",
+    "not in": "not in", "not_in": "not in", "nin": "not in", "∉": "not in",
+
+    # Textuales
+    "contains": "contains",
+    "startswith": "startswith", "starts_with": "startswith", "starts with": "startswith",
+    "endswith": "endswith",     "ends_with": "endswith",   "ends with": "endswith",
 }
 
 
 def _normalize_op(op: str) -> str:
-    s = str(op).strip().lower()
-    return _ALIAS_MAP.get(s, op)
+    """Devuelve el operador canónico definido en el Literal de Filter.operator."""
+    if op is None:
+        return op
+    s = str(op).strip()
+
+    # Normaliza unicode y separadores comunes
+    s_low = (
+        s.lower()
+        .replace("≥", ">=")
+        .replace("≤", "<=")
+        .replace("≠", "!=")
+        .replace("_", " ")
+    )
+
+    # Unifica frases a llaves del alias dict
+    s_key = (
+        s_low
+        .replace("starts with", "startswith")
+        .replace("ends with", "endswith")
+        .strip()
+    )
+
+    return _ALIAS_MAP.get(s_key, s)
 
 
 # --- filtro tipado (símbolos como dominio final) ---
@@ -577,12 +899,23 @@ class Filter(BaseModel):
     ]
     value: Any
 
-    # Acepta aliases y los convierte a símbolos ANTES de validar el Literal
     @field_validator("operator", mode="before")
     @classmethod
     def _before_operator(cls, v):
         return _normalize_op(v)
 
+class HistoryItem(BaseModel):
+    id: int
+    question: str
+    datasource: Dict[str, Any]
+    generated: Dict[str, Any]
+    row_count: int
+    created_at: str
+    answer_text: str
+
+class HistoryList(BaseModel):
+    items: List[HistoryItem]
+    total: int
 
 # --- parser de filtros escritos como string ---
 def _parse_filter_string(s: str) -> Optional[Dict[str, Any]]:
@@ -686,14 +1019,20 @@ class SavedSource(BaseModel):
 
 class ExcelSource(BaseModel):
     type: Literal["excel"] = "excel"
-    path: str
-    sheet_name: int | str | None = 0
+    path: Optional[str] = None              # legado (ruta en el servidor)
+    file_id: Optional[str] = None           # recomendado (archivo subido)
+    sheet_name: Optional[Union[int, str]] = 0  # para CSV se ignora
+
+    @model_validator(mode="after")
+    def _ensure_path_or_file_id(self):
+        if not self.path and not self.file_id:
+            raise ValueError("Excel datasource: debes enviar file_id o path")
+        return self
 
 DataSource = Annotated[
     Union[MySQLSource, PostgresSource, SQLiteSource, ExcelSource, SavedSource],
-    Field(discriminator="type")
+    Field(discriminator="type"),
 ]
-
 
 class ChatOptions(BaseModel):
     language: Literal["es", "en"] = "es"
@@ -1151,29 +1490,123 @@ def answer_excel(question: str, source: ExcelSource, opts: ChatOptions) -> ChatR
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest, payload: dict = Depends(require_jwt), db: Session = Depends(get_db)):
-    # ❌ los admins no usan el chatbot
+def chat(
+    req: ChatRequest,
+    payload: dict = Depends(require_non_admin),
+    db: Session = Depends(get_db),
+):
+    # Bloqueo de admins en chatbot
     if str(payload.get("role", "")).lower() == "admin":
         raise HTTPException(status_code=403, detail="Admins no pueden usar el chatbot")
 
     ds = req.datasource
 
+    # === Selección por tipo de datasource ===
     if ds.type == "excel":
-        return answer_excel(req.question, ds, req.options)
+        # Soporte: file_id (preferido) o path (retro-compatibilidad)
+        # - Si llega file_id, lo resolvemos a la ruta del servidor
+        # - Si llega path, lo usamos tal cual (modo legado)
+        file_id = getattr(ds, "file_id", None) or (ds.dict().get("file_id") if hasattr(ds, "dict") else None)
+        path = getattr(ds, "path", None) or (ds.dict().get("path") if hasattr(ds, "dict") else None)
 
-    # conexiones SQL directas
-    if ds.type in ("mysql", "postgres", "sqlite"):
-        return answer_sql(req.question, ds.sqlalchemy_url, req.options)
+        if not path and not file_id:
+            raise HTTPException(status_code=400, detail="Excel: debes enviar file_id o path")
 
-    # conexión guardada por id (admin la creó antes)
-    if ds.type == "saved":
+        resolved_path = _path_from_file_id(file_id) if file_id else path
+
+        # Asegura sheet_name por defecto (primera hoja)
+        sheet_name = getattr(ds, "sheet_name", None)
+        if sheet_name is None:
+            sheet_name = 0
+
+        try:
+            # Pydantic v2
+            resolved_ds = ds.model_copy(
+                update={"path": resolved_path, "sheet_name": sheet_name, "file_id": None}
+            )
+        except Exception:
+            _d = dict(ds if isinstance(ds, dict) else ds.dict())
+            _d.update({"path": resolved_path, "sheet_name": sheet_name, "file_id": None, "type": "excel"})
+            resolved_ds = _d
+
+        resp = answer_excel(req.question, resolved_ds, req.options)
+
+    elif ds.type in ("mysql", "postgres", "sqlite"):
+        resp = answer_sql(req.question, ds.sqlalchemy_url, req.options)
+
+    elif ds.type == "saved":
         conn = db.query(Connection).filter_by(id=ds.connection_id, is_active=True).first()
         if not conn:
             raise HTTPException(status_code=404, detail="Conexión no encontrada o inactiva")
-        return answer_sql(req.question, conn.sqlalchemy_url, req.options)
+        resp = answer_sql(req.question, conn.sqlalchemy_url, req.options)
 
-    raise HTTPException(status_code=400, detail="Datasource no soportado")
+    else:
+        raise HTTPException(status_code=400, detail="Datasource no soportado")
 
+    try:
+        user_id = str(
+            payload.get("sub")
+            or payload.get("user_id")
+            or payload.get("email")
+            or "anonymous"
+        )
+        row_count = len(resp.table.rows) if resp.table and resp.table.rows else 0
+        history_store.add(
+            user_id=user_id,
+            question=req.question,
+            datasource=req.datasource.model_dump() if hasattr(req.datasource, "model_dump") else req.datasource,
+            generated=resp.generated,
+            row_count=row_count,
+            answer_text=resp.answer_text,
+        )
+    except Exception as _e:
+        print("WARN: no se pudo guardar historial:", _e)
+
+    return resp
+
+@app.get("/history", response_model=HistoryList)
+def get_history(
+    limit: int = 100,
+    offset: int = 0,
+    payload: dict = Depends(require_jwt),
+    db: Session = Depends(get_db),   # opcional, lo dejo por consistencia
+):
+    user_id = str(
+        payload.get("sub")
+        or payload.get("user_id")
+        or payload.get("email")
+        or "anonymous"
+    )
+    rows = history_store.list(user_id=user_id, limit=limit, offset=offset)
+
+    items = [
+        HistoryItem(
+            id=r["id"],
+            question=r["question"],
+            datasource=r["datasource"],
+            generated=r["generated"],
+            row_count=r["row_count"],
+            created_at=r["created_at"],
+            answer_text=r.get("answer_text", "") or "",
+        )
+        for r in rows
+    ]
+    total = history_store.count(user_id=user_id)
+    return HistoryList(items=items, total=total)
+
+@app.delete("/history")
+def clear_history(
+    payload: dict = Depends(require_jwt),
+    db: Session = Depends(get_db),   # opcional, lo dejo por consistencia
+):
+    user_id = str(
+        payload.get("sub")
+        or payload.get("user_id")
+        or payload.get("email")
+        or "anonymous"
+    )
+    deleted = history_store.clear(user_id=user_id)
+    return {"deleted": deleted}
 
 
 # =========================
@@ -1196,45 +1629,131 @@ if __name__ == "__main__":
         )
 
 @app.get("/excel/sheets")
-def list_excel_sheets(path: str = Query(..., description="Ruta del archivo .xlsx accesible para el servidor")):
-    path_l = path.lower()
-    if not (path_l.endswith(".xlsx") or path_l.endswith(".xls")):
-        raise HTTPException(status_code=400, detail="Solo se listan hojas para archivos Excel (.xlsx/.xls)")
+def excel_sheets(
+    path: Optional[str] = Query(None, description="Ruta absoluta en el servidor (legado)"),
+    file_id: Optional[str] = Query(None, description="ID del archivo subido"),
+    user=Depends(require_non_admin),
+):
+    if not path and not file_id:
+        raise HTTPException(status_code=400, detail="Debes enviar file_id o path")
+
+    resolved_path = _path_from_file_id(file_id) if file_id else path
+    if not resolved_path or not os.path.exists(resolved_path):
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+
+    ext = os.path.splitext(resolved_path)[1].lower()
 
     try:
-        wb = openpyxl.load_workbook(path, read_only=True)
-        names = wb.sheetnames
-        return {"path": path, "sheets": names}
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Archivo no encontrado: {path}")
+        if ext in {".xlsx", ".xls"}:
+            # Leer nombres de hojas
+            # pd.ExcelFile es eficiente para solo listar hojas
+            with pd.ExcelFile(resolved_path) as xf:
+                return {"sheets": xf.sheet_names}
+        elif ext == ".csv":
+            # Para CSV no hay hojas; devolvemos un placeholder
+            return {"sheets": ["__csv__"]}
+        else:
+            raise HTTPException(status_code=400, detail=f"Extensión no soportada: {ext}")
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"No se pudieron listar hojas: {e}")
+        raise HTTPException(status_code=400, detail=f"No fue posible leer el archivo: {e}")
+
     
 @app.get("/excel/preview")
-def preview_excel(
-    path: str,
-    sheet_name: str | int | None = 0,
-    offset: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=500),
+def excel_preview(
+    sheet_name: Optional[Union[str, int]] = Query(None, description="Nombre o índice de la hoja (Excel)"),
+    offset: int = Query(0, ge=0, description="Desplazamiento de filas (>= 0)"),
+    limit: int = Query(50, ge=1, le=1000, description="Cantidad de filas a devolver (1..1000)"),
+    path: Optional[str] = Query(None, description="Ruta absoluta en el servidor (legado)"),
+    file_id: Optional[str] = Query(None, description="ID del archivo subido"),
+    user=Depends(require_non_admin),
 ):
+    if not path and not file_id:
+        raise HTTPException(status_code=400, detail="Debes enviar file_id o path")
+
+    resolved_path = _path_from_file_id(file_id) if file_id else path
+    if not resolved_path or not os.path.exists(resolved_path):
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+
+    ext = os.path.splitext(resolved_path)[1].lower()
+
     try:
-        # lee solo la porción necesaria
-        # estrategia simple: leer toda la hoja y paginar en memoria (MVP)
-        df = pd.read_excel(path, sheet_name=sheet_name)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Archivo no encontrado: {path}")
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Hoja inválida: {e}")
+        if ext in {".xlsx", ".xls"}:
+            # Si no viene sheet_name, por defecto 0 (primera hoja)
+            target_sheet = 0 if sheet_name is None else sheet_name
+
+            # Cargar toda la hoja para poder calcular total; en la práctica es suficiente para previews
+            df = pd.read_excel(resolved_path, sheet_name=target_sheet)
+
+            total = int(len(df))
+            if offset >= total:
+                # Página vacía pero con metadatos correctos
+                return {
+                    "columns": list(df.columns.astype(str)),
+                    "rows": [],
+                    "page": {"offset": offset, "limit": limit, "total": total},
+                }
+
+            # Segmento solicitado
+            window = df.iloc[offset : offset + limit]
+            columns = list(window.columns.astype(str))
+            rows = window.where(pd.notna(window), None).values.tolist()  # NaN -> None para JSON
+
+            return {
+                "columns": columns,
+                "rows": rows,
+                "page": {"offset": offset, "limit": limit, "total": total},
+            }
+
+        elif ext == ".csv":
+            # Para CSV: calcular columnas/total de forma eficiente
+            # 1) Leemos una primera pasada para columnas
+            head_df = pd.read_csv(resolved_path, nrows=0)
+            columns = list(head_df.columns.astype(str))
+
+            # 2) Total de filas: contamos rápidamente (sin header)
+            #    Nota: esto abre el archivo en modo texto; si tu CSV es enorme,
+            #    considera estrategias más optimizadas (dask, pyarrow, etc.)
+            with open(resolved_path, "r", encoding="utf-8", errors="ignore") as f:
+                # Descuenta la línea de encabezado si existe
+                total = sum(1 for _ in f) - 1
+                if total < 0:
+                    total = 0
+
+            if offset >= total:
+                return {
+                    "columns": columns,
+                    "rows": [],
+                    "page": {"offset": offset, "limit": limit, "total": total},
+                }
+
+            # 3) Leemos exactamente la ventana deseada:
+            #    - skiprows salta (offset) filas de datos + 1 de header
+            #    - nrows limita la lectura
+            #    Para evitar re-parsear el header, usamos header=None y luego reasignamos columnas
+            window = pd.read_csv(
+                resolved_path,
+                skiprows=range(1, 1 + offset),  # empieza tras el header (línea 0)
+                nrows=limit,
+                header=None,
+            )
+            window.columns = columns
+            rows = window.where(pd.notna(window), None).values.tolist()
+
+            return {
+                "columns": columns,
+                "rows": rows,
+                "page": {"offset": offset, "limit": limit, "total": total},
+            }
+
+        else:
+            raise HTTPException(status_code=400, detail=f"Extensión no soportada: {ext}")
+
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        # Por ejemplo: sheet_name inválido
+        raise HTTPException(status_code=400, detail=f"Parámetros inválidos: {ve}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error leyendo Excel: {e}")
-
-    total = len(df)
-    cols = list(df.columns)
-    rows = df.iloc[offset: offset + limit].fillna("").values.tolist()
-
-    return {
-        "sheet": {"name": str(sheet_name)},
-        "columns": cols,
-        "rows": rows,
-        "page": {"offset": offset, "limit": limit, "total": int(total)},
-    }
+        raise HTTPException(status_code=400, detail=f"No fue posible previsualizar el archivo: {e}")

@@ -1,34 +1,32 @@
-import { Link } from 'react-router-dom';
-
-import Logo from '../components/Logo';
-// Reutilizamos los estilos de la navbar para el brand-pill
-import '../components/NavBar.css';
-
-import './Landing.css';
+import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import Logo from "../components/Logo";
+import "../components/NavBar.css";
+import "./Landing.css";
+import { useAuth } from "../auth/authcontext"; // 👈 importamos el contexto
 
 export default function Landing() {
-  return (
-    <>
-      <main className="landing-wrap">
-        <section className="hero-card">
-          {/* Logo grande en el héroe */}
-          <div
-            className="hero-logo"
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}
-          >
-            <Logo size={48} />
-          </div>
+  const { t } = useTranslation();
+  const { auth } = useAuth(); // obtenemos el rol
 
-          <h3 className="hero-title">Query your data. No SQL. No formulas</h3>
-          <p className="hero-sub">
-            Convert Spanish and English questions to database queries instantly. Get clear answers
-            without technical knowledge.
-          </p>
-          <Link to="/main" className="cta-btn">
-            Start Now
-          </Link>
-        </section>
-      </main>
-    </>
+  // 👇 definimos la ruta de destino según el rol
+  const target = auth.role === "admin" ? "/admin" : "/main";
+
+  return (
+    <main className="landing-wrap">
+      <section className="hero-card">
+        <div className="hero-logo">
+          <Logo size={48} />
+        </div>
+
+        <h3 className="hero-title">{t("landing.title")}</h3>
+        <p className="hero-sub">{t("landing.subtitle")}</p>
+
+        {/* 👇 el botón lleva a /admin si es admin, o /main si es usuario */}
+        <Link to={target} className="cta-btn">
+          {t("landing.cta")}
+        </Link>
+      </section>
+    </main>
   );
 }
