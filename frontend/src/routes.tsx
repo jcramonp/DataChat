@@ -39,9 +39,9 @@ function RequireNonAdmin({ children }: { children: React.ReactNode }) {
 }
 
 function HistoryRoute() {
-  const { token } = getAuth();
-  if (!token) return <Navigate to="/login" replace />;
-  return <History apiBase={API_BASE} token={token} />;
+  const { token } = getAuth() || { token: '' };
+  console.log('[HistoryRoute] token?', !!token, token?.slice(0, 12));
+  return <History apiBase={API_BASE} token={token ?? ''} />;
 }
 
 export const router = createBrowserRouter([
