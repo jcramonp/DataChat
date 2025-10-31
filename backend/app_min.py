@@ -32,6 +32,7 @@ from passlib.context import CryptContext
 from fastapi import Query
 import openpyxl
 from time import time
+from routers import asr
 
 # ========= HistoryStore (inlined) =========
 class HistoryStore:
@@ -149,12 +150,13 @@ class HistoryStore:
 # ========= Env & App =========
 load_dotenv()
 app = FastAPI(title="DataChatbot MVP", version="0.1.0")
+app.include_router(asr.router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # ========= Seguridad / JWT =========
