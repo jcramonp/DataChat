@@ -82,7 +82,7 @@ export default function NavBar() {
             aria-label="Toggle theme"
             title="Toggle theme"
           >
-            {theme === "light" ? "🌙 Dark" : "☀️ Light"}
+            {theme === "light" ? "Dark" : "Light"}
           </button>
 
           {/* Autenticación */}
