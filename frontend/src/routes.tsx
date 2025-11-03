@@ -12,6 +12,7 @@ import AdminSessions from './pages/AdminSessions';
 import FaqPage from "./pages/FaqPage";
 import { getAuth } from './services/api';
 import History from './pages/History';
+import AdminLogs from "./pages/AdminLogs";
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
 
@@ -64,6 +65,7 @@ export const router = createBrowserRouter([
       { path: 'admin/users', element: <RequireAdmin><AdminUsers /></RequireAdmin> },
       { path: 'admin/connections', element: <RequireAdmin><AdminConnections /></RequireAdmin> },
       { path: 'admin/sessions', element: <RequireAdmin><AdminSessions /></RequireAdmin> },
+      { path: "/admin/logs", element: <RequireAdmin><AdminLogs /></RequireAdmin> },
 
       { path: '/faq', element: <FaqPage />},
     ],

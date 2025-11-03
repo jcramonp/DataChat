@@ -21,6 +21,8 @@ def _find_ffmpeg() -> str:
         r"C:\ffmpeg\bin\ffmpeg.exe",
         r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
         r"C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe",
+        r"C:\FFmpeg\bin\ffmpeg.exe",
+        r"C:\Program Files\WinGet\Links\ffmpeg.exe",
     ]
     for c in common:
         if os.path.isfile(c):

@@ -16,7 +16,16 @@
     "admin": "Admin",
     "main": "Principal",
     "login": "Entrar",
-    "logout": "Salir"
+    "logout": "Salir",
+    "logs": "Logs"
+  },
+  "admin": {
+    "title": "Panel de administración",
+    "buttons": {
+      "connections": "Conexiones",
+      "users": "Usuarios",
+      "logs": "Logs de actividad"
+    }
   },
   "language": "Idioma",
   "session": {
@@ -29,7 +38,15 @@
     "viewQuery": "Ver consulta",
     "copy": "Copiar",
     "newChat": "Nuevo chat",
-    "loading": "Cargando…"
+    "loading": "Cargando…",
+    "exportCsv": "Exportar CSV",
+    "exportExcel": "Exportar Excel",
+    "upload": "Subir",
+    "uploading": "Subiendo…",
+    "noData": "Sin datos para mostrar",
+    "search": "Buscar",
+    "clear": "Limpiar",
+    "action": "acción…"
   },
   "errors": {
     "backend": "Error consultando el backend.",
@@ -40,8 +57,10 @@
     "excelSheets": "No se pudieron cargar las hojas del Excel.",
     "excelPreview": "No se pudo previsualizar la hoja seleccionada.",
     "missingSqlUrl": "Debes indicar la SQLAlchemy URL para MySQL.",
-    "missingExcelPath": "Debes indicar la ruta del Excel en el servidor.",
-    "invalidConnectionId": "Debes indicar un Connection ID válido (número)."
+    "missingExcelPath": "Debes subir un archivo Excel o CSV.",
+    "invalidConnectionId": "Debes indicar un ID de conexión válido (número).",
+    "exportExcel": "No se pudo exportar a Excel.",
+    "exportCsv": "No se pudo exportar a CSV."
   },
   "connection": {
     "source": "Origen de datos",
@@ -125,5 +144,13 @@
         "a": "Por defecto limitamos resultados (ej.: max_rows: 200). Puedes ajustar este valor en las opciones de la solicitud."
       }
     ]
+  },
+  "toasts": {
+    "answerReady": "Respuesta lista",
+    "uploadOk": "Archivo subido",
+    "connectionsLoaded": "Conexiones cargadas",
+    "connectionsError": "No se pudieron cargar las conexiones",
+    "csvDownloaded": "CSV descargado",
+    "xlsxDownloaded": "Excel descargado"
   }
 }

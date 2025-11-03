@@ -16,7 +16,16 @@
     "admin": "Admin",
     "main": "Main",
     "login": "Login",
-    "logout": "Logout"
+    "logout": "Logout",
+    "logs": "Logs"
+  },
+  "admin": {
+    "title": "Admin panel",
+    "buttons": {
+      "connections": "Connections",
+      "users": "Users",
+      "logs": "Activity logs"
+    }
   },
   "language": "Language",
   "session": {
@@ -29,7 +38,15 @@
     "viewQuery": "View query",
     "copy": "Copy",
     "newChat": "New Chat",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "exportCsv": "Export CSV",
+    "exportExcel": "Export Excel",
+    "upload": "Upload",
+    "uploading": "Uploading…",
+    "noData": "No data to display",
+    "search": "Search",
+    "clear": "Clear",
+    "action": "action…"
   },
   "errors": {
     "backend": "Error contacting the backend.",
@@ -40,8 +57,10 @@
     "excelSheets": "Could not load Excel sheets.",
     "excelPreview": "Could not preview the selected sheet.",
     "missingSqlUrl": "You must provide the SQLAlchemy URL for MySQL.",
-    "missingExcelPath": "You must provide the Excel path on the server.",
-    "invalidConnectionId": "You must provide a valid numeric Connection ID."
+    "missingExcelPath": "You must upload an Excel or CSV file.",
+    "invalidConnectionId": "You must provide a valid numeric Connection ID.",
+    "exportExcel": "Could not export to Excel.",
+    "exportCsv": "Could not export to CSV."
   },
   "connection": {
     "source": "Data source",
@@ -125,5 +144,13 @@
         "a": "By default we limit results (e.g., max_rows: 200). You can adjust this in the request options."
       }
     ]
+  },
+  "toasts": {
+    "answerReady": "Answer ready",
+    "uploadOk": "File uploaded",
+    "connectionsLoaded": "Connections loaded",
+    "connectionsError": "Could not load connections",
+    "csvDownloaded": "CSV downloaded",
+    "xlsxDownloaded": "Excel downloaded"
   }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { askData, listExcelSheetsById, previewExcelById, uploadExcel } from '../services/api';
+import { askData, listExcelSheetsById, previewExcelById, uploadExcel, listPublicConnections } from '../services/api';
 import type { ChatResponse } from '../services/api';
 import './MainPage.css';
 import { useAuth } from '../auth/AuthContext';
@@ -7,6 +7,9 @@ import ConnectionCard from "../components/ConnectionCard";
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from "react-i18next";
 import DataTable from '../components/DataTable';
+import { tableToCSV, downloadBlob, exportAsXLSX } from '../utils/export';
+import { useToast } from '../ui/Toast';
+
 
 type Msg = {
   role: 'user' | 'assistant';
@@ -138,6 +141,7 @@ export default function MainPage() {
   const { auth } = useAuth();
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
+  const toast = useToast();
 
   // Chat
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -149,7 +153,7 @@ export default function MainPage() {
   const [showConn, setShowConn] = useState(false);
   const [lang, setLang] = useState<'es' | 'en'>((i18n.resolvedLanguage as 'es' | 'en') ?? 'es');
   const [source, setSource] = useState<SourceType>('mysql');
-
+  const [connections, setConnections] = useState<{id:number; name:string; db_type:string}[]>([]);
   // MySQL
   const [sqlUrl, setSqlUrl] = useState(
     'mysql+pymysql://app:app@localhost:3306/empresa_demo?charset=utf8mb4'
@@ -193,6 +197,29 @@ export default function MainPage() {
       .catch(() => setError(t("errors.excelSheets")));
   }, [source, excelFileId]);
 
+  // US22: Cargar conexiones guardadas para el desplegable
+  useEffect(() => {
+  const load = async () => {
+    if (source !== 'saved') return;
+    try {
+      const data = await listPublicConnections();
+      setConnections(data);
+      if (
+          data.length &&
+          (connectionId === '' || !data.some(d => d.id === connectionId))
+      ) {
+        setConnectionId(data[0].id);
+      }
+      toast.info(t("toasts.connectionsLoaded", "Conexiones cargadas"));
+    } catch {
+      setConnections([]);
+      toast.error(t("toasts.connectionsError", "No se pudieron cargar las conexiones"));
+    }
+  };
+  load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [source]);
+
   //  US05: Previsualizar hoja
   useEffect(() => {
     if (source !== 'excel' || !excelFileId || sheetName === undefined || sheetName === null) return;
@@ -205,68 +232,84 @@ export default function MainPage() {
 
   /** Envía pregunta al backend (uso existente) */
   const sendPrompt = async (q: string): Promise<boolean> => {
-    const question = (q || '').trim();
-    setError('');
-    if (!question) return false;
+  const question = (q || '').trim();
+  setError('');
+  if (!question) return false;
 
-    // Validaciones
-    if (source === 'mysql' && !sqlUrl) {
-      setError(t("errors.missingSqlUrl"));
-      return false;
+  // Validaciones
+  if (source === 'mysql' && !sqlUrl) {
+    setError(t("errors.missingSqlUrl"));
+    toast.error(t("errors.missingSqlUrl"));
+    return false;
+  }
+  if (source === 'excel' && !excelFileId) {
+    setError(t("errors.missingExcelPath"));
+    toast.error(t("errors.missingExcelPath"));
+    return false;
+  }
+  if (source === 'saved' && (connectionId === '' || isNaN(Number(connectionId)))) {
+    setError(t("errors.invalidConnectionId"));
+    toast.error(t("errors.invalidConnectionId"));
+    return false;
+  }
+
+  const datasource =
+    source === 'mysql'
+      ? ({ type: 'mysql', sqlalchemy_url: sqlUrl } as const)
+      : source === 'excel'
+        ? ({ type: 'excel', file_id: excelFileId, sheet_name: sheetName } as const)
+        : ({ type: 'saved', connection_id: Number(connectionId) } as const);
+
+  pushMessage({ role: 'user', text: question });
+  setLoading(true);
+
+  try {
+    const resp = await askData({
+      token: auth.token ?? "",
+      question,
+      datasource,
+      options: { language: lang, max_rows: 200 },
+    });
+
+    pushMessage({
+      role: 'assistant',
+      text: resp.answer_text,
+      sql: resp.generated,
+      table: resp.table ?? null,
+    });
+
+    toast.success(t("toasts.answerReady", "Listo: respuesta generada"));
+    return true;
+
+  } catch (err: any) {
+    const raw = String(err?.message || "");
+    const msg = raw.toLowerCase();
+
+    if (err?.status === 401 || msg.includes("jwt") || msg.includes("unauthorized") || msg.includes("no autorizado")) {
+      setError(t("errors.unauthorized"));
+      toast.error(t("errors.unauthorized"));
+    } else if (err?.status === 403) {
+      setError(t("errors.forbidden"));
+      toast.error(t("errors.forbidden"));
+    } else if (err?.status === 404) {
+      setError(t("errors.not_found"));
+      toast.error(t("errors.not_found"));
+    } else if (msg.includes("network")) {
+      setError(t("errors.network"));
+      toast.error(t("errors.network"));
+    } else {
+      setError(t("errors.backend"));
+      toast.error(raw || t("errors.backend"));
     }
-    if (source === 'excel' && !excelFileId) {
-      setError(t("errors.missingExcelPath"));
-      return false;
-    }
-    if (source === 'saved' && (connectionId === '' || isNaN(Number(connectionId)))) {
-      setError(t("errors.invalidConnectionId"));
-      return false;
-    }
 
-    const datasource =
-      source === 'mysql'
-        ? ({ type: 'mysql', sqlalchemy_url: sqlUrl } as const)
-        : source === 'excel'
-          ? ({ type: 'excel', file_id: excelFileId, sheet_name: sheetName } as const)
-          : ({ type: 'saved', connection_id: Number(connectionId) } as const);
+    pushMessage({ role: 'assistant', text: `⚠️ ${raw || t("errors.backend")}` });
+    return false;
 
-    pushMessage({ role: 'user', text: question });
-    setLoading(true);
+  } finally {
+    setLoading(false);
+  }
+};
 
-    try {
-      const resp = await askData({
-        token: auth.token ?? "",
-        question,
-        datasource,
-        options: { language: lang, max_rows: 200 },
-      });
-
-      pushMessage({
-        role: 'assistant',
-        text: resp.answer,
-        sql: resp.generated,
-        table: resp.table ?? null,
-      });
-      return true;
-    } catch (err: any) {
-      const msg = (err?.message || "").toLowerCase();
-      if (err?.status === 401 || msg.includes("jwt") || msg.includes("unauthorized") || msg.includes("no autorizado")) {
-        setError(t("errors.unauthorized"));
-      } else if (err?.status === 403) {
-        setError(t("errors.forbidden"));
-      } else if (err?.status === 404) {
-        setError(t("errors.not_found"));
-      } else if (msg.includes("network")) {
-        setError(t("errors.network"));
-      } else {
-        setError(t("errors.backend"));
-      }
-      pushMessage({ role: 'assistant', text: `⚠️ ${t("errors.backend")}` });
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Envío por formulario (texto)
   const handleSend = async (e: React.FormEvent) => {
@@ -338,6 +381,7 @@ export default function MainPage() {
           }}
           preview={preview}
           connectionIdLabel={t("main.labels.connectionId")}
+          connections={connections}
           connectionId={connectionId}
           onConnectionIdChange={setConnectionId}
         />
@@ -371,76 +415,88 @@ export default function MainPage() {
             </div>
 
           {source === 'excel' && (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 12px' }}>
-              <input
-                id="excel-file-input"
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                style={{ display: 'none' }}
-                onChange={async (e) => {
-                  const inputEl = e.currentTarget as HTMLInputElement;
-                  const file = inputEl.files?.[0];
-                  if (!file) return;
-                  setError('');
-                  setUploading(true);
+              <div style={{display: 'flex', gap: 8, alignItems: 'center', padding: '8px 12px'}}>
+                <input
+                    id="excel-file-input"
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    style={{display: 'none'}}
+                    onChange={async (e) => {
+                      const inputEl = e.currentTarget as HTMLInputElement;
+                      const file = inputEl.files?.[0];
+                      if (!file) return;
+                      setError('');
+                      setUploading(true);
 
-                  try {
-                    if (!auth.token) {
-                      setError(t("errors.unauthorized"));
-                      return;
-                    }
-                    const res = await uploadExcel(file, auth.token);
-                    setExcelFileId(res.file_id);
-                    setExcelPath(file.name);
-                  } catch (err) {
-                    setError(t("errors.excelUpload") || "Error al subir el archivo");
-                  } finally {
-                    setUploading(false);
-                    inputEl.value = '';
-                  }
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => document.getElementById('excel-file-input')?.click()}
-                className="btn-secondary"
-                disabled={uploading}
-              >
-                {uploading ? t("common.uploading", "Subiendo…") : t("common.upload", "Subir Excel")}
-              </button>
-              {excelPath ? <span style={{ opacity: 0.8 }}>{excelPath}</span> : null}
-              {excelFileId ? (
-                <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.7 }}>
+                      try {
+                        if (!auth.token) {
+                          const msg = t("errors.unauthorized");
+                          setError(msg);
+                          toast.error(msg);
+                          return;
+                        }
+                        const res = await uploadExcel(file, auth.token);
+                        setExcelFileId(res.file_id);
+                        setExcelPath(file.name);
+
+                        // ✅ mensaje de éxito
+                        toast.success(t("toasts.uploadOk", "Archivo subido"));
+
+                      } catch (err) {
+                        const msg = t("errors.excelUpload") || "Error al subir el archivo";
+                        setError(msg);
+
+                        // ❌ mensaje de error
+                        toast.error(msg);
+
+                      } finally {
+                        setUploading(false);
+                        inputEl.value = '';
+                      }
+                    }}
+                />
+
+                <button
+                    type="button"
+                    onClick={() => document.getElementById('excel-file-input')?.click()}
+                    className="btn-secondary"
+                    disabled={uploading}
+                >
+                  {uploading ? t("common.uploading", "Subiendo…") : t("common.upload", "Subir Excel")}
+                </button>
+                {excelPath ? <span style={{opacity: 0.8}}>{excelPath}</span> : null}
+                {excelFileId ? (
+                    <span style={{marginLeft: 'auto', fontSize: 12, opacity: 0.7}}>
                   id: {excelFileId.slice(0, 8)}…
                 </span>
-              ) : null}
-            </div>
+                ) : null}
+              </div>
           )}
-        </div>
+          </div>
 
-        <div className="chat-messages">
-          {messages.map((m, idx) => (
-            <div key={idx + m.text} className={`msg ${m.role}`}>
-              <div>{m.text}</div>
+          <div className="chat-messages">
+            {messages.map((m, idx) => (
+                <div key={idx + m.text} className={`msg ${m.role}`}>
+                  <div>{m.text}</div>
 
-              {m.role === 'assistant' && m.sql?.code && (
-                <details style={{ marginTop: 8 }}>
-                  <summary style={{ cursor: 'pointer', fontWeight: 'bold' }}>
-                    {t("common.viewQuery")}{' '}
-                    <span
-                      style={{
-                        marginLeft: 6,
-                        fontSize: 12,
-                        background: '#ece7f5',
-                        color: '#4b3fb3',
-                        padding: '2px 6px',
-                        borderRadius: 8,
-                      }}
-                    >
+                  {m.role === 'assistant' && m.sql?.code && (
+                      <details style={{marginTop: 8}}>
+                        <summary style={{cursor: 'pointer', fontWeight: 'bold'}}>
+                          {t("common.viewQuery")}{' '}
+                          <span
+                              style={{
+                                marginLeft: 6,
+                                fontSize: 12,
+                                background: '#ece7f5',
+                                color: '#4b3fb3',
+                                padding: '2px 6px',
+                                borderRadius: 8,
+                              }}
+                          >
                       {m.sql.type.toUpperCase()}
                     </span>
-                  </summary>
-                  <pre
+                        </summary>
+                        <pre
                     style={{
                       background: '#0f172a',
                       color: '#e2e8f0',
@@ -478,6 +534,68 @@ export default function MainPage() {
                           pageSizeOptions={[5, 10, 20, 50, 100]}
                           className="dt-embedded"
                         />
+                        {/* Botones de exportación */}
+                        <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                          <button
+                              type="button"
+                              onClick={() => {
+                                try {
+                                  const base = messages.findLast?.(x => x.role === 'user')?.text || 'datachat';
+                                  const safe = base.toLowerCase().slice(0,40).replace(/[^a-z0-9-_]+/g,'-').replace(/-+/g,'-');
+                                  const stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+                                  const name = `${safe}-${stamp}.csv`;
+
+                                  const csv = tableToCSV(m.table!.columns as string[], m.table!.rows as any[][]);
+                                  downloadBlob(name, 'text/csv;charset=utf-8;', csv);
+
+                                  toast.success(t("toasts.csvDownloaded", "CSV descargado"));
+                                } catch (e) {
+                                  console.error(e);
+                                  toast.error(t("errors.exportCsv") || "No se pudo exportar a CSV.");
+                                }
+                              }}
+                              style={{
+                                border: 'none',
+                                borderRadius: 8,
+                                padding: '6px 12px',
+                                cursor: 'pointer',
+                                background: '#e9f5ff',
+                                color: '#0b6aa6',
+                                fontWeight: 600,
+                              }}
+                          >
+                            {t("common.exportCsv", "Exportar CSV")}
+                          </button>
+
+                          <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const base = messages.findLast?.(x => x.role === 'user')?.text || 'datachat';
+                                  const safe = base.toLowerCase().slice(0,40).replace(/[^a-z0-9-_]+/g,'-').replace(/-+/g,'-');
+                                  const stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+                                  const name = `${safe}-${stamp}.xlsx`;
+
+                                  await exportAsXLSX(name, m.table!.columns as string[], m.table!.rows as any[][]);
+                                  toast.success(t("toasts.xlsxDownloaded", "Excel descargado"));
+                                } catch (e) {
+                                  console.error(e);
+                                  toast.error(t("errors.exportExcel") || "No se pudo exportar a Excel.");
+                                }
+                              }}
+                              style={{
+                                border: 'none',
+                                borderRadius: 8,
+                                padding: '6px 12px',
+                                cursor: 'pointer',
+                                background: '#ecfdf5',
+                                color: '#0f766e',
+                                fontWeight: 600,
+                              }}
+                          >
+                            {t("common.exportExcel", "Exportar Excel")}
+                          </button>
+                        </div>
                       </div>
                     ) : (
                       <div style={{ marginTop: 12, opacity: 0.75 }}>

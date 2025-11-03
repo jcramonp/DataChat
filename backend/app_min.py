@@ -8,6 +8,8 @@ from uuid import uuid4
 import sqlite3
 import os, shutil, pathlib
 
+from fastapi.requests import Request
+from fastapi.responses import JSONResponse
 from fastapi import FastAPI, Depends, HTTPException, status, Path, UploadFile, File, Depends, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
@@ -32,7 +34,39 @@ from passlib.context import CryptContext
 from fastapi import Query
 import openpyxl
 from time import time
+import math
+
+
+
+
+
+
+
+
+
+#arreglo
+
+# --- INICIO: forzar FFmpeg en PATH (Windows) ---
+import os, shutil
+
+# Cambia esta ruta si tu ffmpeg está en otro sitio
+_FFMPEG_DIR = r"C:\FFmpeg\bin"
+
+if os.name == "nt" and os.path.isdir(_FFMPEG_DIR):
+    # prepend para asegurar que se use tu build
+    os.environ["PATH"] = _FFMPEG_DIR + os.pathsep + os.environ.get("PATH", "")
+    os.environ.setdefault("FFMPEG_PATH",  os.path.join(_FFMPEG_DIR, "ffmpeg.exe"))
+    os.environ.setdefault("FFPROBE_PATH", os.path.join(_FFMPEG_DIR, "ffprobe.exe"))
+    print("[ffmpeg] using:", shutil.which("ffmpeg"))
+else:
+    print("[ffmpeg] WARNING: expected dir not found:", _FFMPEG_DIR)
+# --- FIN: forzar FFmpeg en PATH ---
+
+
+
 from routers import asr
+
+
 
 # ========= HistoryStore (inlined) =========
 class HistoryStore:
@@ -147,6 +181,91 @@ class HistoryStore:
             ).fetchone()
             return int(row["c"]) if row else 0
 
+
+# ========= ActivityLogStore =========
+class ActivityLogStore:
+    def __init__(self, db_path: str = "./backend/history.db") -> None:
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        self.db_path = db_path
+        self._ensure_schema()
+
+    def _conn(self) -> sqlite3.Connection:
+        cx = sqlite3.connect(self.db_path)
+        cx.row_factory = sqlite3.Row
+        return cx
+
+    def _ensure_schema(self):
+        with self._conn() as cx:
+            cx.execute("""
+            CREATE TABLE IF NOT EXISTS activity_log(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              ts TEXT NOT NULL,
+              level TEXT NOT NULL,        -- info|warning|error
+              actor TEXT,                 -- email o 'system'
+              action TEXT NOT NULL,       -- login, query, connection_create, error, etc.
+              path TEXT,                  -- request.path si aplica
+              meta_json TEXT NOT NULL     -- detalles (json)
+            )
+            """)
+            cx.execute("CREATE INDEX IF NOT EXISTS idx_activity_ts ON activity_log(ts DESC)")
+            cx.execute("CREATE INDEX IF NOT EXISTS idx_activity_action ON activity_log(action)")
+            cx.execute("CREATE INDEX IF NOT EXISTS idx_activity_level ON activity_log(level)")
+
+    def add(self, *, level: str, action: str, actor: str|None, path: str|None, meta: dict|None=None):
+        with self._conn() as cx:
+            cx.execute("""
+              INSERT INTO activity_log(ts, level, actor, action, path, meta_json)
+              VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                datetime.now(timezone.utc).isoformat(),
+                level,
+                actor or "",
+                action,
+                path or "",
+                json.dumps(meta or {}, ensure_ascii=False)
+            ))
+
+    def list(self, *, limit:int=100, offset:int=0, level:str|None=None, action:str|None=None, q:str|None=None):
+        sql = "SELECT id, ts, level, actor, action, path, meta_json FROM activity_log"
+        conds, args = [], []
+        if level:
+            conds.append("level = ?"); args.append(level)
+        if action:
+            conds.append("action = ?"); args.append(action)
+        if q:
+            conds.append("(actor LIKE ? OR path LIKE ? OR meta_json LIKE ?)")
+            args.extend([f"%{q}%", f"%{q}%", f"%{q}%"])
+        if conds:
+            sql += " WHERE " + " AND ".join(conds)
+        sql += " ORDER BY datetime(ts) DESC LIMIT ? OFFSET ?"
+        args.extend([limit, offset])
+        with self._conn() as cx:
+            rows = cx.execute(sql, args).fetchall()
+            items = []
+            for r in rows:
+                items.append({
+                    "id": r["id"],
+                    "ts": r["ts"],
+                    "level": r["level"],
+                    "actor": r["actor"],
+                    "action": r["action"],
+                    "path": r["path"],
+                    "meta": json.loads(r["meta_json"] or "{}"),
+                })
+            # total para paginación simple
+            c_sql = "SELECT COUNT(*) AS c FROM activity_log"
+            if conds:
+                c_sql += " WHERE " + " AND ".join(conds)
+            total = cx.execute(c_sql, args[:-2]).fetchone()["c"]
+            return {"items": items, "total": total}
+
+    def clear(self) -> int:
+        with self._conn() as cx:
+            cur = cx.execute("DELETE FROM activity_log")
+            return int(cur.rowcount)
+
+
+
 # ========= Env & App =========
 load_dotenv()
 app = FastAPI(title="DataChatbot MVP", version="0.1.0")
@@ -158,6 +277,29 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["Authorization", "Content-Type"],
 )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_logger(request: Request, exc: HTTPException):
+    try:
+        actor = None
+        # intenta leer bearer si viene
+        authz = request.headers.get("authorization") or ""
+        if authz.lower().startswith("bearer "):
+            token = authz.split(" ", 1)[1]
+            try:
+                p = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+                actor = p.get("sub")
+            except Exception:
+                pass
+        log_event("error" if exc.status_code >= 500 else "warning",
+                  "error_http",
+                  actor=actor,
+                  path=str(request.url.path),
+                  meta={"status": exc.status_code, "detail": str(exc.detail)})
+    except Exception as e:
+        print("WARN exception logger:", e)
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 # ========= Seguridad / JWT =========
 JWT_SECRET = os.getenv("JWT_SECRET", "dev")     # cámbialo en prod
@@ -271,6 +413,7 @@ def admin_list_sessions(_: dict = Depends(require_roles(["admin"]))):
             "expired": ( _safe_int(exp) is not None and now > _safe_int(exp) ),
         })
 
+    log_event("info", "sessions_list", actor="admin", path="/admin/sessions", meta={"count": len(out)})
     return {
         "items": out,
         "total": len(out),
@@ -292,12 +435,20 @@ def admin_revoke_session(
     s.revoked = True
     SESSIONS[jti] = s
 
+    log_event("warning", "session_revoke", actor="admin", path=f"/admin/sessions/{jti}", meta={"jti": jti})
+
     return {"ok": True, "jti": jti}
 
 
 # ========= Persistencia de usuarios (SQLite) =========
 DB_URL = os.getenv("AUTH_DB_URL", "sqlite:///./auth.db")
 history_store = HistoryStore("./backend/history.db")
+activity_log = ActivityLogStore("./backend/history.db")
+def log_event(level: str, action: str, *, actor: str | None = None, path: str | None = None, meta: dict | None = None):
+    try:
+        activity_log.add(level=level, action=action, actor=actor, path=path, meta=meta or {})
+    except Exception as e:
+        print("WARN: no se pudo registrar log:", e)
 engine = create_engine(DB_URL, connect_args={"check_same_thread": False} if DB_URL.startswith("sqlite") else {})
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
@@ -343,6 +494,8 @@ def seed_admin():
         db.close()
 
 seed_admin()
+
+
 
 # ========= Modelos de auth y endpoints =========
 class LoginRequest(BaseModel):
@@ -391,6 +544,8 @@ def auth_login(req: LoginRequest, db: Session = Depends(get_db)):
         last_seen=now,
         revoked=False,
     )
+
+    log_event("info", "login", actor=email, path="/auth/login", meta={"role": u.role})
     return {"access_token": token, "token_type": "bearer", "role": u.role}
 
 
@@ -401,6 +556,8 @@ def auth_register(req: RegisterRequest, _: dict = Depends(require_roles(["admin"
         raise HTTPException(status_code=400, detail="El usuario ya existe")
     u = User(email=email, password_hash=pwd_ctx.hash(req.password), role=req.role)
     db.add(u); db.commit()
+    log_event("info", "user_create", actor=_.get("email") if isinstance(_, dict) else None,
+              path="/auth/register", meta={"new_user": email, "role": u.role})
     return {"ok": True, "email": email, "role": u.role}
 
 @app.get("/auth/me")
@@ -414,6 +571,8 @@ def auth_logout(payload: dict = Depends(require_jwt)):
     if s:
         s.revoked = True
         SESSIONS[jti] = s
+
+    log_event("info", "logout", actor=payload.get("sub"), path="/auth/logout")
     return {"ok": True}
 
 @app.get("/admin/ping")
@@ -441,12 +600,18 @@ def admin_create_connection(
     db: Session = Depends(get_db),
 ):
     if _dialect_from_url(req.sqlalchemy_url) != req.db_type:
+        log_event("error", "connection_create_failed", actor=admin["email"], path="/admin/connections",
+                  meta={"reason": "db_type_mismatch"})
         raise HTTPException(status_code=400, detail="db_type no coincide con la URL")
     try:
         _validate_connection(req.sqlalchemy_url)
     except Exception as e:
+        log_event("error", "connection_create_failed", actor=admin["email"], path="/admin/connections",
+                  meta={"reason": "validate_error", "error": str(e)})
         raise HTTPException(status_code=400, detail=f"No se pudo conectar: {e}")
     if db.query(Connection).filter_by(name=req.name).first():
+        log_event("error", "connection_create_failed", actor=admin["email"], path="/admin/connections",
+                  meta={"reason": "duplicate_name", "name": req.name})
         raise HTTPException(status_code=400, detail="Ya existe una conexión con ese nombre")
     conn = Connection(
         name=req.name,
@@ -456,6 +621,8 @@ def admin_create_connection(
         created_by=admin["email"],
     )
     db.add(conn); db.commit(); db.refresh(conn)
+    log_event("info", "connection_create", actor=admin["email"], path="/admin/connections",
+              meta={"id": conn.id, "name": conn.name, "db_type": conn.db_type})
     return conn
 
 
@@ -463,6 +630,31 @@ def admin_create_connection(
 def admin_list_connections(_: dict = Depends(require_roles(["admin"])), db: Session = Depends(get_db)):
     return db.query(Connection).order_by(Connection.id.desc()).all()
 
+
+# ---------- NUEVO: schema de salida público ----------
+class PublicConnectionOut(BaseModel):
+    id: int
+    name: str
+    db_type: str
+    is_active: bool
+
+# ---------- NUEVO: endpoint público para usuarios ----------
+@app.get("/connections", response_model=List[PublicConnectionOut])
+def list_public_connections(_: dict = Depends(require_jwt), db: Session = Depends(get_db)):
+    rows = (
+        db.query(Connection)
+        .filter(Connection.is_active == True)
+        .order_by(Connection.id.desc())
+        .all()
+    )
+
+    log_event("info", "connections_list_public", actor=_.get("sub"), path="/connections", meta={"count": len(rows)})
+    return [
+        PublicConnectionOut(
+            id=r.id, name=r.name, db_type=r.db_type, is_active=r.is_active
+        )
+        for r in rows
+    ]
 
 print("[boot] app_min desde:", __file__)
 print("[exec_pandas] v2 cargada (sin locals())")
@@ -520,6 +712,8 @@ def _path_from_file_id(file_id: str) -> str:
 @app.post("/files/upload")
 def upload_file(file: UploadFile = File(...), user=Depends(require_non_admin)):
     meta = _save_upload_to_disk(file)
+    log_event("info", "file_upload", actor=user.get("sub") or user.get("email"), path="/files/upload",
+              meta={"filename": meta["filename"], "size": meta["size_bytes"], "mime": meta["mime"]})
     # (Opcional) registrar en tu store/BD si quieres TTL/limpieza
     return {
         "file_id": meta["file_id"],
@@ -972,6 +1166,39 @@ def _parse_filter_string(s: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+
+class ActivityItem(BaseModel):
+    id: int
+    ts: str
+    level: str
+    actor: str
+    action: str
+    path: str
+    meta: dict
+
+class ActivityList(BaseModel):
+    items: List[ActivityItem]
+    total: int
+
+@app.get("/admin/logs", response_model=ActivityList)
+def admin_list_logs(
+    limit: int = 100,
+    offset: int = 0,
+    level: Optional[str] = None,
+    action: Optional[str] = None,
+    q: Optional[str] = None,
+    _: dict = Depends(require_roles(["admin"]))
+):
+    data = activity_log.list(limit=limit, offset=offset, level=level, action=action, q=q)
+    items = [ActivityItem(**it) for it in data["items"]]
+    return ActivityList(items=items, total=data["total"])
+
+@app.delete("/admin/logs")
+def admin_clear_logs(_: dict = Depends(require_roles(["admin"]))):
+    deleted = activity_log.clear()
+    return {"deleted": deleted}
+
+
 # --- plan tipado que acepta dicts o strings en filters y normaliza ---
 class PlanModel(BaseModel):
     operation: Literal["mean", "sum", "max", "min", "median", "count"]
@@ -1058,6 +1285,137 @@ class ChatResponse(BaseModel):
     table: Optional[TableData] = None
     notices: List[str] = []
 
+def _fmt_num(x: Any) -> str:
+    try:
+        if isinstance(x, bool):
+            return "1" if x else "0"
+        if isinstance(x, int):
+            return f"{x:,}"
+        if isinstance(x, float):
+            if math.isfinite(x):
+                return f"{x:,.2f}"
+            return str(x)
+    except Exception:
+        pass
+    return str(x)
+
+def _looks_numeric(v: Any) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+def _guess_entity_from_question(q: Optional[str]) -> Optional[str]:
+    if not q:
+        return None
+    qs = q.lower()
+    # ES y EN (muy básico, extensible)
+    mapping = {
+        "ciudad": "ciudades", "ciudades": "ciudades",
+        "customer": "clientes", "customers": "clientes", "cliente": "clientes", "clientes": "clientes",
+        "usuario": "usuarios", "usuarios": "usuarios", "users": "usuarios",
+        "producto": "productos", "productos": "productos", "products": "productos",
+        "pedido": "pedidos", "pedidos": "pedidos", "orders": "pedidos",
+    }
+    # devuelve la primera coincidencia útil
+    for k, ent in mapping.items():
+        if k in qs:
+            return ent
+    return None
+
+def make_answer_text(table_like: dict, lang: str = "es", question: Optional[str] = None) -> str:
+    """
+    table_like = { "columns": [...], "rows": [[...], ...], "total": int? }
+    Devuelve una frase corta y útil (ES/EN).
+    """
+    cols = [str(c) for c in (table_like.get("columns") or [])]
+    rows = table_like.get("rows") or []
+    total = table_like.get("total", len(rows))
+    is_es = (lang or "").lower().startswith("es")
+
+    if not rows:
+        return "No se encontraron resultados." if is_es else "No results found."
+
+    # === Caso 1: 1x1 (agregados típicos) ===
+    if len(rows) == 1 and len(cols) == 1:
+        v = rows[0][0]
+        label = cols[0].strip().lower()
+        ent = _guess_entity_from_question(question)
+        if any(k in label for k in ("count", "total")):
+            if is_es:
+                return f"Hay {_fmt_num(v)} {ent or 'registros'}."
+            return f"There are {_fmt_num(v)} {ent or 'records'}."
+        if any(k in label for k in ("avg", "mean", "promedio")):
+            return (f"El promedio es {_fmt_num(v)}."
+                    if is_es else f"The average is {_fmt_num(v)}.")
+        if "sum" in label:
+            return (f"La suma es {_fmt_num(v)}."
+                    if is_es else f"The sum is {_fmt_num(v)}.")
+        if "max" in label:
+            return (f"El máximo es {_fmt_num(v)}."
+                    if is_es else f"The maximum is {_fmt_num(v)}.")
+        if "min" in label:
+            return (f"El mínimo es {_fmt_num(v)}."
+                    if is_es else f"The minimum is {_fmt_num(v)}.")
+        # genérico 1x1
+        return f"{cols[0]}: {_fmt_num(v)}."
+
+    # === Caso 2: 1 fila, varias columnas → mostrar key-values cortos ===
+    if len(rows) == 1 and len(cols) > 1:
+        pairs = []
+        for i, c in enumerate(cols[:4]):  # máx 4 campos
+            pairs.append(f"{c}={_fmt_num(rows[0][i])}")
+        if is_es:
+            return f"1 registro — " + ", ".join(pairs) + ("…" if len(cols) > 4 else "")
+        return "1 record — " + ", ".join(pairs) + ("…" if len(cols) > 4 else "")
+
+    # === Caso 3: ≤10 filas, 2 columnas y la 2ª numérica → ranking/top ===
+    if len(cols) == 2 and len(rows) <= 10 and all(len(r) == 2 for r in rows):
+        second_is_numeric = any(_looks_numeric(r[1]) for r in rows)
+        if second_is_numeric:
+            show_n = min(5, len(rows))
+            items = "; ".join(f"{rows[i][0]}: {_fmt_num(rows[i][1])}" for i in range(show_n))
+            if is_es:
+                extra = f" (+{len(rows)-show_n} más)" if len(rows) > show_n else ""
+                return f"Top {show_n}: {items}{extra}."
+            else:
+                extra = f" (+{len(rows)-show_n} more)" if len(rows) > show_n else ""
+                return f"Top {show_n}: {items}{extra}."
+
+    # === Caso 4: resumen general con columnas y ejemplos ===
+    n = min(3, len(rows))
+    examples = ", ".join(_fmt_num(rows[i][0]) for i in range(n))
+    if is_es:
+        base = f"Mostrando {len(rows)} fila(s)"
+        if total and total > len(rows):
+            base += f" de {total}"
+        if cols:
+            base += f" — columnas: {', '.join(map(str, cols[:3]))}" + ("…" if len(cols) > 3 else "")
+        if examples:
+            base += f". Ejemplos: {examples}."
+        return base
+    else:
+        base = f"Showing {len(rows)} row(s)"
+        if total and total > len(rows):
+            base += f" out of {total}"
+        if cols:
+            base += f" — columns: {', '.join(map(str, cols[:3]))}" + ("…" if len(cols) > 3 else "")
+        if examples:
+            base += f". Examples: {examples}."
+        return base
+
+def _detect_lang(question: str, preferred: str | None = None) -> str:
+    """
+    Devuelve 'es' o 'en'.
+    Si preferred viene válido ('es'|'en'), lo respeta.
+    Si no, detecta español por palabras muy comunes.
+    """
+    if preferred and preferred.lower() in ("es", "en"):
+        return preferred.lower()
+    q = (question or "").lower()
+    es_markers = [
+        "cuánt", "cuant", "hay", "promedio", "por ", "donde", "entre", "mayor", "menor",
+        "máximo", "maximo", "mínimo", "minimo", "suma", "total", "cliente", "clientes",
+        "producto", "productos", "ciudad", "ciudades"
+    ]
+    return "es" if any(m in q for m in es_markers) else "en"
 
 # =========================
 # Helpers: schema extraction
@@ -1398,9 +1756,11 @@ def answer_sql(question: str, sqlalchemy_url: str, opts: ChatOptions) -> ChatRes
     table = TableData(
         columns=cols, rows=df.astype(object).where(pd.notnull(df), None).values.tolist()
     )
-    answer_text = (
-        f"Mostrando {len(table.rows)} fila(s)." if opts.language == "es"
-        else f"Showing {len(table.rows)} row(s)."
+    lang = _detect_lang(question, getattr(opts, "language", None))
+    answer_text = make_answer_text(
+        {"columns": cols, "rows": table.rows, "total": len(df)},
+        lang=opts.language,
+        question=question,
     )
     return ChatResponse(
         answer_text=answer_text,
@@ -1472,10 +1832,11 @@ def answer_excel(question: str, source: ExcelSource, opts: ChatOptions) -> ChatR
         rows=out.astype(object).where(pd.notnull(out), None).values.tolist(),
     )
 
-    answer_text = (
-        f"Mostrando {len(table.rows)} fila(s)."
-        if opts.language == "es"
-        else f"Showing {len(table.rows)} row(s)."
+    lang = _detect_lang(question, getattr(opts, "language", None))
+    answer_text = make_answer_text(
+        {"columns": table.columns, "rows": table.rows, "total": len(out)},
+        lang=opts.language,
+        question=question,
     )
 
     return ChatResponse(
@@ -1497,61 +1858,59 @@ def chat(
     payload: dict = Depends(require_non_admin),
     db: Session = Depends(get_db),
 ):
-    # Bloqueo de admins en chatbot
     if str(payload.get("role", "")).lower() == "admin":
         raise HTTPException(status_code=403, detail="Admins no pueden usar el chatbot")
 
-    ds = req.datasource
-
-    # === Selección por tipo de datasource ===
-    if ds.type == "excel":
-        # Soporte: file_id (preferido) o path (retro-compatibilidad)
-        # - Si llega file_id, lo resolvemos a la ruta del servidor
-        # - Si llega path, lo usamos tal cual (modo legado)
-        file_id = getattr(ds, "file_id", None) or (ds.dict().get("file_id") if hasattr(ds, "dict") else None)
-        path = getattr(ds, "path", None) or (ds.dict().get("path") if hasattr(ds, "dict") else None)
-
-        if not path and not file_id:
-            raise HTTPException(status_code=400, detail="Excel: debes enviar file_id o path")
-
-        resolved_path = _path_from_file_id(file_id) if file_id else path
-
-        # Asegura sheet_name por defecto (primera hoja)
-        sheet_name = getattr(ds, "sheet_name", None)
-        if sheet_name is None:
-            sheet_name = 0
-
-        try:
-            # Pydantic v2
-            resolved_ds = ds.model_copy(
-                update={"path": resolved_path, "sheet_name": sheet_name, "file_id": None}
-            )
-        except Exception:
-            _d = dict(ds if isinstance(ds, dict) else ds.dict())
-            _d.update({"path": resolved_path, "sheet_name": sheet_name, "file_id": None, "type": "excel"})
-            resolved_ds = _d
-
-        resp = answer_excel(req.question, resolved_ds, req.options)
-
-    elif ds.type in ("mysql", "postgres", "sqlite"):
-        resp = answer_sql(req.question, ds.sqlalchemy_url, req.options)
-
-    elif ds.type == "saved":
-        conn = db.query(Connection).filter_by(id=ds.connection_id, is_active=True).first()
-        if not conn:
-            raise HTTPException(status_code=404, detail="Conexión no encontrada o inactiva")
-        resp = answer_sql(req.question, conn.sqlalchemy_url, req.options)
-
-    else:
-        raise HTTPException(status_code=400, detail="Datasource no soportado")
-
     try:
-        user_id = str(
-            payload.get("sub")
-            or payload.get("user_id")
-            or payload.get("email")
-            or "anonymous"
-        )
+        ds = req.datasource
+
+        if ds.type == "excel":
+            file_id = getattr(ds, "file_id", None) or (ds.dict().get("file_id") if hasattr(ds, "dict") else None)
+            path = getattr(ds, "path", None) or (ds.dict().get("path") if hasattr(ds, "dict") else None)
+            if not path and not file_id:
+                raise HTTPException(status_code=400, detail="Excel: debes enviar file_id o path")
+            resolved_path = _path_from_file_id(file_id) if file_id else path
+            sheet_name = getattr(ds, "sheet_name", None)
+            if sheet_name is None:
+                sheet_name = 0
+            try:
+                resolved_ds = ds.model_copy(update={"path": resolved_path, "sheet_name": sheet_name, "file_id": None})
+            except Exception:
+                _d = dict(ds if isinstance(ds, dict) else ds.dict())
+                _d.update({"path": resolved_path, "sheet_name": sheet_name, "file_id": None, "type": "excel"})
+                resolved_ds = _d
+            resp = answer_excel(req.question, resolved_ds, req.options)
+
+        elif ds.type in ("mysql", "postgres", "sqlite"):
+            resp = answer_sql(req.question, ds.sqlalchemy_url, req.options)
+
+        elif ds.type == "saved":
+            conn = db.query(Connection).filter_by(id=ds.connection_id, is_active=True).first()
+            if not conn:
+                raise HTTPException(status_code=404, detail="Conexión no encontrada o inactiva")
+            resp = answer_sql(req.question, conn.sqlalchemy_url, req.options)
+        else:
+            raise HTTPException(status_code=400, detail="Datasource no soportado")
+
+        # >>> ADD: log éxito de consulta
+        rc = len(resp.table.rows) if resp.table and resp.table.rows else 0
+        log_event("info", "query_ok", actor=payload.get("sub"), path="/chat",
+                  meta={"datasource": ds.type, "rows": rc, "lang": req.options.language})
+
+    except HTTPException as e:
+        # >>> ADD: log error funcional
+        log_event("error", "query_error", actor=payload.get("sub"), path="/chat",
+                  meta={"status": e.status_code, "detail": str(e.detail), "datasource": getattr(req.datasource, "type", None)})
+        raise
+    except Exception as e:
+        # >>> ADD: log error inesperado
+        log_event("error", "query_error", actor=payload.get("sub"), path="/chat",
+                  meta={"status": 500, "detail": str(e), "datasource": getattr(req.datasource, "type", None)})
+        raise
+
+    # (historial se mantiene igual)
+    try:
+        user_id = str(payload.get("sub") or payload.get("user_id") or payload.get("email") or "anonymous")
         row_count = len(resp.table.rows) if resp.table and resp.table.rows else 0
         history_store.add(
             user_id=user_id,
@@ -1565,6 +1924,7 @@ def chat(
         print("WARN: no se pudo guardar historial:", _e)
 
     return resp
+
 
 @app.get("/history", response_model=HistoryList)
 def get_history(
@@ -1594,6 +1954,7 @@ def get_history(
         for r in rows
     ]
     total = history_store.count(user_id=user_id)
+    log_event("info", "history_list", actor=user_id, path="/history", meta={"count": len(items)})
     return HistoryList(items=items, total=total)
 
 @app.delete("/history")
@@ -1608,6 +1969,7 @@ def clear_history(
         or "anonymous"
     )
     deleted = history_store.clear(user_id=user_id)
+    log_event("warning", "history_clear", actor=user_id, path="/history", meta={"deleted": deleted})
     return {"deleted": deleted}
 
 
@@ -1650,9 +2012,13 @@ def excel_sheets(
             # Leer nombres de hojas
             # pd.ExcelFile es eficiente para solo listar hojas
             with pd.ExcelFile(resolved_path) as xf:
+                log_event("info", "excel_sheets", actor=user.get("sub") or user.get("email"),
+                          path="/excel/sheets", meta={"file": os.path.basename(resolved_path), "sheets": len(sheets)})
                 return {"sheets": xf.sheet_names}
         elif ext == ".csv":
             # Para CSV no hay hojas; devolvemos un placeholder
+            log_event("info", "excel_sheets", actor=user.get("sub") or user.get("email"),
+                      path="/excel/sheets", meta={"file": os.path.basename(resolved_path), "sheets": 1, "csv": True})
             return {"sheets": ["__csv__"]}
         else:
             raise HTTPException(status_code=400, detail=f"Extensión no soportada: {ext}")
@@ -1682,72 +2048,115 @@ def excel_preview(
 
     try:
         if ext in {".xlsx", ".xls"}:
-            # Si no viene sheet_name, por defecto 0 (primera hoja)
+            # Si no viene sheet_name, usar 0 (primera hoja)
             target_sheet = 0 if sheet_name is None else sheet_name
 
-            # Cargar toda la hoja para poder calcular total; en la práctica es suficiente para previews
+            # Cargar hoja completa para conocer el total (suficiente para previews)
             df = pd.read_excel(resolved_path, sheet_name=target_sheet)
 
             total = int(len(df))
             if offset >= total:
-                # Página vacía pero con metadatos correctos
-                return {
+                result = {
                     "columns": list(df.columns.astype(str)),
                     "rows": [],
                     "page": {"offset": offset, "limit": limit, "total": total},
                 }
+                # LOG
+                log_event(
+                    "info", "excel_preview",
+                    actor=(user.get("sub") or user.get("email") or ""),
+                    path="/excel/preview",
+                    meta={
+                        "file": os.path.basename(resolved_path),
+                        "sheet": str(target_sheet),
+                        "offset": offset, "limit": limit,
+                        "returned": 0
+                    }
+                )
+                return result
 
-            # Segmento solicitado
-            window = df.iloc[offset : offset + limit]
+            window = df.iloc[offset: offset + limit]
             columns = list(window.columns.astype(str))
-            rows = window.where(pd.notna(window), None).values.tolist()  # NaN -> None para JSON
+            rows = window.where(pd.notna(window), None).values.tolist()  # NaN -> None
 
-            return {
+            result = {
                 "columns": columns,
                 "rows": rows,
                 "page": {"offset": offset, "limit": limit, "total": total},
             }
+            # LOG
+            log_event(
+                "info", "excel_preview",
+                actor=(user.get("sub") or user.get("email") or ""),
+                path="/excel/preview",
+                meta={
+                    "file": os.path.basename(resolved_path),
+                    "sheet": str(target_sheet),
+                    "offset": offset, "limit": limit,
+                    "returned": len(rows)
+                }
+            )
+            return result
 
         elif ext == ".csv":
-            # Para CSV: calcular columnas/total de forma eficiente
-            # 1) Leemos una primera pasada para columnas
+            # 1) Columnas
             head_df = pd.read_csv(resolved_path, nrows=0)
             columns = list(head_df.columns.astype(str))
 
-            # 2) Total de filas: contamos rápidamente (sin header)
-            #    Nota: esto abre el archivo en modo texto; si tu CSV es enorme,
-            #    considera estrategias más optimizadas (dask, pyarrow, etc.)
+            # 2) Total rápido (descontar header)
             with open(resolved_path, "r", encoding="utf-8", errors="ignore") as f:
-                # Descuenta la línea de encabezado si existe
                 total = sum(1 for _ in f) - 1
                 if total < 0:
                     total = 0
 
             if offset >= total:
-                return {
+                result = {
                     "columns": columns,
                     "rows": [],
                     "page": {"offset": offset, "limit": limit, "total": total},
                 }
+                # LOG
+                log_event(
+                    "info", "excel_preview",
+                    actor=(user.get("sub") or user.get("email") or ""),
+                    path="/excel/preview",
+                    meta={
+                        "file": os.path.basename(resolved_path),
+                        "sheet": "__csv__",
+                        "offset": offset, "limit": limit,
+                        "returned": 0
+                    }
+                )
+                return result
 
-            # 3) Leemos exactamente la ventana deseada:
-            #    - skiprows salta (offset) filas de datos + 1 de header
-            #    - nrows limita la lectura
-            #    Para evitar re-parsear el header, usamos header=None y luego reasignamos columnas
+            # 3) Ventana exacta
             window = pd.read_csv(
                 resolved_path,
-                skiprows=range(1, 1 + offset),  # empieza tras el header (línea 0)
+                skiprows=range(1, 1 + offset),  # saltar header + offset
                 nrows=limit,
                 header=None,
             )
             window.columns = columns
             rows = window.where(pd.notna(window), None).values.tolist()
 
-            return {
+            result = {
                 "columns": columns,
                 "rows": rows,
                 "page": {"offset": offset, "limit": limit, "total": total},
             }
+            # LOG
+            log_event(
+                "info", "excel_preview",
+                actor=(user.get("sub") or user.get("email") or ""),
+                path="/excel/preview",
+                meta={
+                    "file": os.path.basename(resolved_path),
+                    "sheet": "__csv__",
+                    "offset": offset, "limit": limit,
+                    "returned": len(rows)
+                }
+            )
+            return result
 
         else:
             raise HTTPException(status_code=400, detail=f"Extensión no soportada: {ext}")
@@ -1755,7 +2164,29 @@ def excel_preview(
     except HTTPException:
         raise
     except ValueError as ve:
-        # Por ejemplo: sheet_name inválido
+        # p. ej. sheet_name inválido
+        log_event(
+            "error", "excel_preview_failed",
+            actor=(user.get("sub") or user.get("email") or ""),
+            path="/excel/preview",
+            meta={
+                "file": os.path.basename(resolved_path),
+                "sheet": str(sheet_name),
+                "offset": offset, "limit": limit,
+                "error": f"ValueError: {ve}"
+            }
+        )
         raise HTTPException(status_code=400, detail=f"Parámetros inválidos: {ve}")
     except Exception as e:
+        log_event(
+            "error", "excel_preview_failed",
+            actor=(user.get("sub") or user.get("email") or ""),
+            path="/excel/preview",
+            meta={
+                "file": os.path.basename(resolved_path),
+                "sheet": str(sheet_name),
+                "offset": offset, "limit": limit,
+                "error": str(e)
+            }
+        )
         raise HTTPException(status_code=400, detail=f"No fue posible previsualizar el archivo: {e}")

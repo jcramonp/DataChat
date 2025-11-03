@@ -47,7 +47,8 @@ type Props = {
   preview: PreviewT;
 
   // Saved (admin)
-  connectionIdLabel: string;
+  connectionIdLabel: string; // <- FALTABA EN TU TIPO
+  connections?: { id: number; name: string; db_type: string }[];
   connectionId: number | "";
   onConnectionIdChange: (v: number | "") => void;
 
@@ -65,7 +66,7 @@ export default function ConnectionCard(props: Props) {
     sqlalchemyLabel, sqlalchemyPlaceholder, sqlUrl, onSqlUrlChange,
     excelPathLabel, excelPathPlaceholder, excelPath, onExcelPathChange,
     sheetLabel, rowsLabel, sheets, sheetName, onSheetNameChange, preview,
-    connectionIdLabel, connectionId, onConnectionIdChange,
+    connectionIdLabel, connections, connectionId, onConnectionIdChange,
     showText, hideText,
   } = props;
 
@@ -85,7 +86,11 @@ export default function ConnectionCard(props: Props) {
         </button>
       </div>
 
-      <div id="conn-body" className={`conn-body ${show ? "open" : "closed"}`} aria-hidden={!show}>
+      <div
+        id="conn-body"
+        className={`conn-body ${show ? "open" : "closed"}`}
+        aria-hidden={!show}
+      >
         {!show ? null : (
           <div className="connection-form">
             {/* Selector visual (segmented control) */}
@@ -202,14 +207,35 @@ export default function ConnectionCard(props: Props) {
             {source === "saved" && (
               <div className="form-group">
                 <label>{connectionIdLabel}</label>
-                <input
-                  type="number"
-                  placeholder="1"
-                  value={String(connectionId)}
-                  onChange={(e) =>
-                    onConnectionIdChange(e.target.value === "" ? "" : Number(e.target.value))
-                  }
-                />
+                {Array.isArray(connections) && connections.length > 0 ? (
+                  <select
+                    className="form-select"
+                    value={connectionId === "" ? "" : String(connectionId)}
+                    onChange={(e) =>
+                      onConnectionIdChange(
+                        e.target.value === "" ? "" : Number(e.target.value)
+                      )
+                    }
+                  >
+                    {connections.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} (ID {c.id} • {c.db_type})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  // Fallback si aún no cargó el listado
+                  <input
+                    className="form-input"
+                    placeholder="1"
+                    value={connectionId === "" ? "" : String(connectionId)}
+                    onChange={(e) =>
+                      onConnectionIdChange(
+                        e.target.value === "" ? "" : Number(e.target.value)
+                      )
+                    }
+                  />
+                )}
               </div>
             )}
           </div>

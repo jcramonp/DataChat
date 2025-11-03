@@ -134,6 +134,17 @@ export async function logoutServer() {
   }).catch(() => {});
 }
 
+export async function listPublicConnections() {
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  const token = localStorage.getItem('auth_token'); // o usa tu helper getAuth()
+  const res = await fetch(`${API_URL}/connections`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error(`Error ${res.status}`);
+  return res.json(); // [{id, name, db_type, is_active}]
+}
+
+
 // ===========================
 // US05 - Excel endpoints
 // ===========================

@@ -1,4 +1,6 @@
-# Python
+# =========================
+# Python / FastAPI (backend)
+# =========================
 venv/
 .venv/
 __pycache__/
@@ -11,46 +13,91 @@ build/
 .coverage
 .pytest_cache/
 .mypy_cache/
+.tox/
+.ruff_cache/
+.ipynb_checkpoints/
+.python-version
 
-# Virtual env
+# Entornos
 .env
 *.env
-
-# IDE
-.idea/
-.vscode/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Data (solo versiona samples)
-data/*
-!data/.gitkeep
-!data/empleados.sample.csv
-
 !.env.example
+.envrc
 
-app.py
+# Logs
+*.log
+logs/**
+!logs/.gitkeep
 
-# --- Bases de datos / datasets ---
+# DBs y datos locales (NO versionar)
 *.sql
 *.dump
 *.db
 *.sqlite*
 *.bak
-*.csv
-*.tsv
-*.xlsx
-*.xls
-*.parquet
+
+# Datasets / uploads locales
 /data/**
 /datasets/**
 /tmp/**
-/mysql_demo*.zip
-/mysql_demo*/**
+/uploads/**
+backend/uploads/**
+!backend/uploads/.gitkeep
+
+# Ejemplos/datasets grandes (mantén solo muestras)
+data/*
+!data/.gitkeep
+!data/empleados.sample.csv
+
+# Archivos del proyecto que no quieres versionar
+app.py
+
+# =========================
+# Node / Vite (frontend)
+# =========================
+node_modules/
+frontend/node_modules/
+
+# Builds y coberturas
+frontend/dist/
+coverage/
+frontend/coverage/
+
+# Logs de gestores de paquetes
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+
+# Env del frontend
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Cache/herramientas
+.eslintcache
+.stylelintcache
+
+# =========================
+# IDE / SO
+# =========================
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# =========================
+# Docker / Compose (local only)
+# =========================
+docker-compose.yml
+infra/docker-compose.prod.yml
+infra/docker-compose.override.yml
+
+
 .prettierignore
 .prettierrc
-docker-compose.yml
 01.init.sql
 mysql_demo.zip
+/mysql_demo*.zip
+/mysql_demo*/**
