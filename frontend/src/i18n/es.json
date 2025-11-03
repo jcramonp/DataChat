@@ -1,0 +1,156 @@
+{
+  "landing": {
+    "title": "Consulta tus datos. Sin SQL. Sin fórmulas",
+    "subtitle": "Convierte preguntas en español o inglés en consultas a la base de datos al instante. Obtén respuestas claras sin conocimientos técnicos.",
+    "cta": "Comenzar"
+  },
+  "login": {
+    "title": "Ingresar",
+    "email": "correo",
+    "password": "contraseña",
+    "submit": "Entrar",
+    "errorGeneric": "Error de login"
+  },
+  "nav": {
+    "home": "Inicio",
+    "admin": "Admin",
+    "main": "Principal",
+    "login": "Entrar",
+    "logout": "Salir",
+    "logs": "Logs"
+  },
+  "admin": {
+    "title": "Panel de administración",
+    "buttons": {
+      "connections": "Conexiones",
+      "users": "Usuarios",
+      "logs": "Logs de actividad"
+    }
+  },
+  "language": "Idioma",
+  "session": {
+    "signedIn": "Sesión iniciada ({{role}})",
+    "signedOut": "No has iniciado sesión"
+  },
+  "common": {
+    "show": "Mostrar",
+    "hide": "Ocultar",
+    "viewQuery": "Ver consulta",
+    "copy": "Copiar",
+    "newChat": "Nuevo chat",
+    "loading": "Cargando…",
+    "exportCsv": "Exportar CSV",
+    "exportExcel": "Exportar Excel",
+    "upload": "Subir",
+    "uploading": "Subiendo…",
+    "noData": "Sin datos para mostrar",
+    "search": "Buscar",
+    "clear": "Limpiar",
+    "action": "acción…"
+  },
+  "errors": {
+    "backend": "Error consultando el backend.",
+    "unauthorized": "No autorizado (JWT inválido). Inicia sesión de nuevo.",
+    "forbidden": "No tienes permisos.",
+    "not_found": "Recurso no encontrado.",
+    "network": "Error de red. Verifica tu conexión.",
+    "excelSheets": "No se pudieron cargar las hojas del Excel.",
+    "excelPreview": "No se pudo previsualizar la hoja seleccionada.",
+    "missingSqlUrl": "Debes indicar la SQLAlchemy URL para MySQL.",
+    "missingExcelPath": "Debes subir un archivo Excel o CSV.",
+    "invalidConnectionId": "Debes indicar un ID de conexión válido (número).",
+    "exportExcel": "No se pudo exportar a Excel.",
+    "exportCsv": "No se pudo exportar a CSV."
+  },
+  "connection": {
+    "source": "Origen de datos",
+    "sourceAria": "Selecciona el origen de datos",
+    "sources": {
+      "mysql": "MySQL",
+      "excel": "Excel",
+      "admin": "BD Admin"
+    }
+  },
+  "history": {
+    "title": "Historial de consultas",
+    "clear": "Limpiar historial",
+    "empty": "No hay consultas aún.",
+    "rows": "filas",
+    "viewAnswer": "Ver respuesta",
+    "hideAnswer": "Ocultar respuesta",
+    "notSaved": "Respuesta no guardada en este item.",
+    "generatedCode": "Código generado",
+    "noContent": "Sin contenido",
+    "datasource": "Origen de datos",
+    "errors": {
+      "tokenExpired": "Sesión expirada. Inicia sesión nuevamente.",
+      "loadGeneric": "No se pudo cargar el historial. Intenta de nuevo.",
+      "clearGeneric": "No se pudo limpiar el historial. Intenta de nuevo."
+    }
+  },
+  "main": {
+    "connection": { "title": "Conexión" },
+    "labels": {
+      "sqlalchemyUrl": "SQLAlchemy URL",
+      "excelPath": "Ruta de Excel (visible para el servidor)",
+      "sheet": "Hoja:",
+      "rows": "filas",
+      "connectionId": "ID de conexión",
+      "savedAdmin": "Guardada (admin)"
+    },
+    "chat": {
+      "title": "Asistente de DataChat",
+      "placeholder": "Pregúntame lo que quieras de tus datos…",
+      "send": "Enviar",
+      "sending": "Enviando…",
+      "thinking": "DataChat está pensando…"
+    },
+    "mysql": { "placeholder": "mysql+pymysql://usuario:clave@host:3306/db" },
+    "excel": { "placeholder": "C:/data/empleados.xlsx" },
+    "saved": { "placeholder": "ID de conexión" },
+    "suggestions": {
+      "q1": "¿Cuántos empleados ingresaron este año?",
+      "q2": "Muestra ventas por región",
+      "q3": "¿Qué clientes tienen más pedidos?"
+    }
+  },
+  "nav2": { "faq": "Preguntas frecuentes" },
+  "faq": {
+    "title": "Preguntas frecuentes",
+    "intro": "Respuestas rápidas a las preguntas más comunes sobre DataChat.",
+    "items": [
+      {
+        "q": "Veo “No autorizado (JWT inválido)”. ¿Qué hago?",
+        "a": "Tu sesión expiró. Cierra sesión e inicia nuevamente desde la página de Login."
+      },
+      {
+        "q": "¿Cómo me conecto a MySQL?",
+        "a": "Abre el panel de Conexión, elige MySQL y pega una URL de SQLAlchemy válida (ej.: mysql+pymysql://usuario:clave@host:3306/db)."
+      },
+      {
+        "q": "¿Cómo consulto un archivo de Excel?",
+        "a": "Elige Excel, ingresa la ruta visible para el servidor (ej.: C:/data/empleados.xlsx), selecciona la hoja y haz tu pregunta."
+      },
+      {
+        "q": "¿Por qué sale “Error consultando el backend”?",
+        "a": "Puede que la API no esté levantada o CORS la bloquee. Asegura que FastAPI esté corriendo y CORS permita http://localhost:5173."
+      },
+      {
+        "q": "¿Cómo cambio el idioma de la app?",
+        "a": "Usa el selector de idioma en la barra superior o en el panel de Conexión. Tu elección se guarda automáticamente."
+      },
+      {
+        "q": "¿Cuántas filas se devuelven?",
+        "a": "Por defecto limitamos resultados (ej.: max_rows: 200). Puedes ajustar este valor en las opciones de la solicitud."
+      }
+    ]
+  },
+  "toasts": {
+    "answerReady": "Respuesta lista",
+    "uploadOk": "Archivo subido",
+    "connectionsLoaded": "Conexiones cargadas",
+    "connectionsError": "No se pudieron cargar las conexiones",
+    "csvDownloaded": "CSV descargado",
+    "xlsxDownloaded": "Excel descargado"
+  }
+}

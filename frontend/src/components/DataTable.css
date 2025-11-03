@@ -1,0 +1,62 @@
+.dt-wrapper {
+  width: 100%;
+  display: grid;
+  gap: 12px;
+}
+.dt-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.dt-left,
+.dt-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dt-table-wrapper {
+  overflow: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+.dt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.dt-table thead th {
+  position: sticky;
+  top: 0;
+  background: #fafafa;
+  text-align: left;
+  padding: 10px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.dt-table td {
+  padding: 10px;
+  border-bottom: 1px solid #f1f3f5;
+  white-space: nowrap;
+}
+.dt-empty {
+  text-align: center;
+  color: #6b7280;
+}
+.dt-right button {
+  padding: 6px 10px;
+  border: 1px solid #e5e7eb;
+  background: white;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.dt-right button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.dt-page input {
+  width: 56px;
+  padding: 4px 6px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
