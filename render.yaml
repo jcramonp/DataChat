@@ -22,6 +22,8 @@ services:
         value: /data/uploads
       - key: OPENAI_API_KEY          # márcalo como secreto en Render
         sync: false
+      - key: ENABLE_ASR
+        value: "1"
 
   # =========================
   # Frontend (Nginx sirviendo Vite build)
@@ -36,8 +38,3 @@ services:
       # Opción simple: después del primer deploy, reemplaza la URL por la del backend que te da Render
       - key: VITE_API_URL
         value: https://datachat-backend.onrender.com
-      # ─────────────────────────────────────────────────────────────────────────
-      # Si prefieres evitar editarlo a mano, Render permite inyectar desde otro
-      # servicio, pero es menos portátil y puede variar según la cuenta/region.
-      # Déjalo así por simplicidad, y cámbialo luego en el panel si la URL difiere.
-      # ─────────────────────────────────────────────────────────────────────────
