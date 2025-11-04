@@ -278,6 +278,9 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 @app.exception_handler(HTTPException)
 async def http_exception_logger(request: Request, exc: HTTPException):
