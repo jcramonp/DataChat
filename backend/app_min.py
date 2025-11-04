@@ -305,11 +305,35 @@ async def http_exception_logger(request: Request, exc: HTTPException):
 JWT_SECRET = os.getenv("JWT_SECRET", "dev")     # cámbialo en prod
 JWT_ALG = "HS256"
 JWT_EXPIRE_MINUTES = 120
+SESSION_INACTIVITY_SECONDS = int(os.getenv("SESSION_INACTIVITY_SECONDS", "900"))  # 15 mins
 
 # Usa Argon2 (evita líos de bcrypt en Windows)
 pwd_ctx = CryptContext(schemes=["argon2"], deprecated="auto")
 
 auth_scheme = HTTPBearer(auto_error=True)
+
+from fastapi import BackgroundTasks
+import asyncio
+
+@app.on_event("startup")
+async def _session_reaper_start():
+    async def _reaper():
+        while True:
+            now = int(time())
+            to_revoke = []
+            for jti, s in list(SESSIONS.items()):
+                last = getattr(s, "last_seen", None)
+                if last is None:
+                    continue
+                if (now - int(last)) >= SESSION_INACTIVITY_SECONDS and not getattr(s, "revoked", False):
+                    to_revoke.append(jti)
+            for jti in to_revoke:
+                s = SESSIONS.get(jti)
+                if s:
+                    s.revoked = True
+                    SESSIONS[jti] = s
+            await asyncio.sleep(30)  # corre cada 30s
+    asyncio.create_task(_reaper())
 
 class SessionOut(BaseModel):
     jti: str
@@ -418,6 +442,15 @@ def admin_list_sessions(_: dict = Depends(require_roles(["admin"]))):
         "items": out,
         "total": len(out),
     }
+
+@app.get("/auth/ping")
+def auth_ping(payload: dict = Depends(require_jwt)):
+    jti = payload.get("jti")
+    s = SESSIONS.get(jti)
+    now = int(time())
+    last = int(getattr(s, "last_seen", now)) if s else now
+    remaining = max(0, SESSION_INACTIVITY_SECONDS - (now - last))
+    return {"now": now, "last_seen": last, "remaining_seconds": remaining}
 
 @app.delete("/admin/sessions/{jti}")
 def admin_revoke_session(

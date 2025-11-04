@@ -2,8 +2,15 @@
 export const API_URL: string =
   (import.meta as any).env?.VITE_API_URL || 'http://127.0.0.1:8000';
 
-const TOKEN_KEY = 'dc_token';
-const ROLE_KEY = 'dc_role';
+// --- helpers base URL ---
+export function apiBase(): string {
+  return API_URL;
+}
+
+// --- storage keys ---
+const TOKEN_KEY = "dc_token";
+const ROLE_KEY  = "dc_role";
+const LEGACY_AUTH_KEY = "auth"; // compatibilidad
 
 // ===== Tipos =====
 export type Lang = 'es' | 'en';
@@ -13,10 +20,9 @@ export type ChatOptions = {
   max_rows?: number;
 };
 
-export type MySQLSource = { type: 'mysql'; sqlalchemy_url: string };
-// Modo legacy por path (lo mantengo porque tu MainPage lo usa en algunos sitios)
-export type ExcelSource = { type: 'excel'; path: string; sheet_name?: number | string | null };
-export type SavedSource = { type: 'saved'; connection_id: number };
+export type MySQLSource = { type: "mysql"; sqlalchemy_url: string };
+export type ExcelSource = { type: "excel"; path: string; sheet_name?: number | string | null };
+export type SavedSource = { type: "saved"; connection_id: number };
 export type DataSource = MySQLSource | ExcelSource | SavedSource;
 
 export type TableData = {
@@ -24,7 +30,7 @@ export type TableData = {
   rows: (string | number | null)[][];
 };
 
-export type Generated = { type: 'sql' | 'pandas'; code: string };
+export type Generated = { type: "sql" | "pandas"; code: string };
 
 // ChatResponse real del backend
 export type ChatResponse = {
@@ -87,6 +93,7 @@ export interface ExcelPreviewResponse {
 
 // ===== Auth helpers =====
 export function setAuth(p: { token?: string; role?: string }) {
+  // Guarda en claves nuevas...
   if (p.token) localStorage.setItem(TOKEN_KEY, p.token);
   else localStorage.removeItem(TOKEN_KEY);
 
@@ -132,15 +139,27 @@ export function getAuth(): { token: string; role: string } {
   }
 }
 
-// ===== util opcional =====
+// ----------------------
+// Utils HTTP
+// ----------------------
+async function errorFromResponse(r: Response): Promise<Error & { status?: number }> {
+  let message = `${r.status} ${r.statusText}`;
+  try {
+    const data = await r.json();
+    if (data && (data.detail || data.message)) {
+      message = data.detail || data.message;
+    }
+  } catch { /* ignore */ }
+  const e = new Error(message) as Error & { status?: number };
+  e.status = r.status;
+  return e;
+}
+
 export async function apiGet(path: string, token?: string) {
   const res = await fetch(`${API_URL}${path}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
-  if (!res.ok) {
-    const txt = await res.text().catch(() => '');
-    throw new Error(`GET ${path} failed: ${res.status} ${res.statusText} ${txt}`);
-  }
+  if (!res.ok) throw await errorFromResponse(res);
   return res.json();
 }
 
@@ -152,18 +171,6 @@ class ResponseError extends Error {
     this.name = 'ResponseError';
     this.status = status;
   }
-}
-async function errorFromResponse(r: Response): Promise<ResponseError> {
-  let message = `${r.status} ${r.statusText}`;
-  try {
-    const data = await r.json();
-    if (data && data.detail) {
-      message = Array.isArray(data.detail) ? data.detail[0]?.msg || message : data.detail;
-    }
-  } catch {
-    // ignore
-  }
-  return new ResponseError(message, r.status);
 }
 
 // ===== Auth API =====
@@ -209,25 +216,26 @@ export async function askData(p: {
   token?: string;
   question: string;
   datasource: any;
-  options?: { language?: Lang; max_rows?: number };
-}): Promise<ChatResponse> {
+  options?: { language?: "es" | "en"; max_rows?: number };
+}) {
   const token = p.token ?? getAuth().token;
   const res = await fetch(`${API_URL}/chat`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify({
       question: p.question,
       datasource: p.datasource,
       options: {
-        language: p.options?.language ?? 'es',
+        language: p.options?.language ?? "es",
         max_rows: p.options?.max_rows ?? 200,
       },
     }),
   });
 
+  if (res.status === 401) throw new Error("No autorizado (JWT inválido).");
   if (!res.ok) throw await errorFromResponse(res);
   return res.json();
 }
@@ -242,7 +250,7 @@ export async function createConnection(p: {
   const res = await fetch(`${API_URL}/admin/connections`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(p),
@@ -296,6 +304,7 @@ export async function previewExcel(
     limit: String(limit),
   });
   const r = await fetch(`${API_URL}/excel/preview?${params.toString()}`);
+  if (!r.ok) throw await errorFromResponse(r);
   if (!r.ok) throw await errorFromResponse(r);
   return r.json();
 }

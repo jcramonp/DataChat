@@ -389,11 +389,56 @@ export default function MainPage() {
 
       {/* CHAT */}
       <section className="container mt-16">
-        <div className="chat-card">
-          <div className="chat-header">
-            <h3>{t("main.chat.title", "DataChat Assistant")}</h3>
-            <div className="chat-actions">
-              <button type="button" title={t("common.newChat")} onClick={() => setMessages([])}>
+        {/* 👇 aquí aplicamos el theming */}
+        <div
+          className="chat-card panel"
+          style={{
+            borderRadius: "12px",
+          }}
+        >
+          <div
+            className="chat-header panel-header"
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              padding: "12px 16px",
+              fontWeight: 500,
+              fontSize: "16px",
+              lineHeight: 1.4,
+            }}
+          >
+            <h3 style={{ margin: 0 }}>
+              {t("main.chat.title", "DataChat Assistant")}
+            </h3>
+
+            <div
+              className="chat-actions"
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "8px",
+                alignItems: "center",
+              }}
+            >
+              {/* limpiar conversación */}
+              <button
+                type="button"
+                title={t("common.newChat")}
+                onClick={() => setMessages([])}
+                style={{
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "6px 12px",
+                  cursor: "pointer",
+                  background: "transparent",
+                  fontWeight: 600,
+                  fontSize: "14px",
+                  lineHeight: 1.3,
+                  color: "rgb(168,85,247)", // violeta visible en ambos temas
+                }}
+              >
                 ＋
               </button>
               <button
@@ -401,14 +446,18 @@ export default function MainPage() {
                 title="Ver historial"
                 onClick={() => navigate('/history')}
                 style={{
-                  border: 'none',
+                  border: "none",
                   borderRadius: 8,
-                  padding: '6px 12px',
-                  cursor: 'pointer',
-                  background: '#f0ecfb',
-                  color: '#5a49d6',
+                  padding: "6px 12px",
+                  cursor: "pointer",
                   fontWeight: 600,
+                  fontSize: "14px",
+                  lineHeight: 1.3,
+
+                  /* estilos dependientes de tema via CSS global:
+                     vamos a dar clases que luego podrás estilizar si quieres */
                 }}
+                className="nav-pill"
               >
                 Historial
               </button>
@@ -475,7 +524,8 @@ export default function MainPage() {
           )}
           </div>
 
-          <div className="chat-messages">
+          {/* Mensajes */}
+          <div className="chat-messages" style={{ padding: "16px" }}>
             {messages.map((m, idx) => (
                 <div key={idx + m.text} className={`msg ${m.role}`}>
                   <div>{m.text}</div>

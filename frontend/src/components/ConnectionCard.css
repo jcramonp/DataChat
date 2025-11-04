@@ -1,39 +1,70 @@
+/* ===== WRAPPER / CARD ===== */
 .connection-card {
-  background-color: #ffffff;
-  border-radius: 1rem;
-  border: 1px solid #e7e3ef;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+  /* NO color duro aquí.
+     El color y fondo ahora vienen de las clases .panel (light/dark)
+     que agregamos al div en ConnectionCard.tsx
+     => border-radius y box-shadow los manejamos vía theme también,
+     así que acá solo dejamos spacing interno adicional si hace falta.
+  */
+
   padding: 1rem 1.25rem;
+  border-radius: 1rem;
+  /* borde / sombra se quitan aquí porque ahora
+     index.css controla .panel tanto en light como en dark */
 }
 
+/* ===== HEADER ===== */
 .connection-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* el borde inferior y color de texto del header
+     vienen ahora de .panel-header en index.css */
 }
 
 .connection-header h3 {
   margin: 0;
   font-size: 1rem;
   font-weight: 700;
-  color: #18181b;
+  /* color controlado por theme (.panel-header en index.css) */
+  color: inherit;
 }
 
+/* ===== TOGGLE BUTTON (Show / Hide) ===== */
 .toggle-button {
   background: none;
   border: none;
-  color: #5a49d6;
   cursor: pointer;
   font-weight: 600;
   padding: 4px 8px;
   border-radius: 8px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  /* color lo estamos metiendo inline en el TSX (morado)
+     para que se vea bien en ambos temas */
 }
 
 .toggle-button:hover {
-  background: #f0ecfb;
+  /* en light será lila muy claro, en dark quedaría raro.
+     Vamos a condicionar por tema:
+  */
 }
 
-.conn-body.closed { display: none; }
+/* hover claro */
+body.light .toggle-button:hover {
+  background: #f0ecfb;
+  color: #4338ca;
+}
+
+/* hover dark: un fondito translúcido morado */
+body.dark .toggle-button:hover {
+  background: rgba(168,85,247,0.12);
+  color: rgb(168,85,247);
+}
+
+.conn-body.closed {
+  display: none;
+}
 
 .connection-form {
   display: flex;
@@ -42,7 +73,12 @@
   margin-top: 10px;
 }
 
-.form-group { display: grid; gap: 6px; }
+/* ===== FORM GROUPS / LABELS ===== */
+
+.form-group {
+  display: grid;
+  gap: 6px;
+}
 
 .form-group.row .row-inline {
   display: flex;
@@ -52,51 +88,129 @@
 
 .form-group label {
   font-size: 0.9rem;
-  color: #3f3f46;
   font-weight: 600;
 }
+
+/* labels en light vs dark */
+body.light .form-group label {
+  color: #3f3f46; /* gris oscuro */
+}
+
+body.dark .form-group label {
+  color: #f8fafc; /* texto claro */
+}
+
+/* ===== INPUTS / SELECTS ===== */
 
 .form-group input,
 .form-select {
   width: 100%;
-  border: 1px solid #d9d9e3;
   border-radius: 10px;
   padding: 10px;
   outline: none;
   transition: border 0.2s ease, box-shadow 0.2s ease;
   font-size: 0.95rem;
+  line-height: 1.4;
+  background: transparent; /* fondo lo toma body.light/body.dark input en index.css */
+  border: 1px solid transparent;
+  color: inherit;
 }
 
-.form-group input:focus,
-.form-select:focus {
+/* focus ring distinto en light/dark */
+body.light .form-group input,
+body.light .form-select {
+  border: 1px solid #d9d9e3;
+  background-color: #ffffff;
+  color: #0f172a;
+}
+
+body.light .form-group input:focus,
+body.light .form-select:focus {
   border-color: #5a49d6;
   box-shadow: 0 0 0 2px rgba(90,73,214,.15);
 }
 
+body.dark .form-group input,
+body.dark .form-select {
+  border: 1px solid rgba(148,163,184,0.3);
+  background-color: rgba(15,23,42,0.9);
+  color: #f8fafc;
+}
+
+body.dark .form-group input:focus,
+body.dark .form-select:focus {
+  border-color: rgba(168,85,247,0.6);
+  box-shadow: 0 0 0 2px rgba(168,85,247,0.3);
+}
+
+/* ===== NOTAS / HINTS ===== */
+
 .form-note {
-  color: #6b7280;
   font-size: 0.9rem;
+}
+
+body.light .form-note {
+  color: #6b7280; /* slate-500 */
+}
+
+body.dark .form-note {
+  color: #94a3b8; /* slate-400 */
 }
 
 .rows-hint {
   font-size: 0.8rem;
+}
+
+body.light .rows-hint {
   color: #6b7280;
 }
 
-.preview-table {
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  overflow: hidden;
+body.dark .rows-hint {
+  color: #94a3b8;
 }
 
-/* Segmented control */
+/* ===== PREVIEW TABLE WRAPPER ===== */
+
+.preview-table {
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid;
+}
+
+body.light .preview-table {
+  border-color: #e5e7eb; /* gris clarito */
+  background-color: #ffffff;
+}
+
+body.dark .preview-table {
+  border-color: rgba(148,163,184,0.3);
+  background-color: rgba(15,23,42,0.6);
+}
+
+/* ===== SEGMENTED CONTROL ===== */
+
 .segmented {
   display: inline-flex;
-  border: 1px solid #d9d9e3;
   border-radius: 12px;
-  background: #f8f8fb;
   padding: 4px;
   gap: 4px;
+  border: 1px solid;
+  background: transparent;
+}
+
+/* light look */
+body.light .segmented {
+  border-color: #d9d9e3;
+  background: #f8f8fb;
+}
+
+/* dark look */
+body.dark .segmented {
+  border-color: rgba(148,163,184,0.3);
+  background: rgba(15,23,42,0.6);
+  box-shadow:
+    0 20px 60px rgba(0,0,0,0.8),
+    0 2px 4px rgba(0,0,0,0.5);
 }
 
 .seg-btn {
@@ -108,18 +222,140 @@
   border-radius: 10px;
   font-size: 0.9rem;
   font-weight: 600;
-  color: #4b5563;
   cursor: pointer;
   transition: background .15s ease, color .15s ease, box-shadow .15s ease;
+  line-height: 1.4;
 }
 
-.seg-btn:hover {
+/* default (no active) text color */
+body.light .seg-btn {
+  color: #4b5563; /* slate-600 */
+}
+
+body.dark .seg-btn {
+  color: #e2e8f0; /* slate-200 */
+}
+
+/* hover visual */
+body.light .seg-btn:hover {
   background: #f0ecfb;
   color: #4338ca;
 }
 
-.seg-btn.active {
+body.dark .seg-btn:hover {
+  background: rgba(168,85,247,0.12); /* violeta translúcido */
+  color: rgb(168,85,247);
+}
+
+/* active tab */
+body.light .seg-btn.active {
   background: #5a49d6;
   color: white;
   box-shadow: 0 2px 6px rgba(90,73,214,.25);
+}
+
+body.dark .seg-btn.active {
+  background: radial-gradient(circle at 30% 20%,
+    rgba(168,85,247,1) 0%,
+    rgba(99,102,241,1) 40%,
+    rgba(49,46,129,0.9) 100%
+  );
+  color: #fff;
+  box-shadow:
+    0 20px 60px rgba(168,85,247,0.55),
+    0 2px 6px rgba(0,0,0,0.8);
+}
+
+/* =========================
+   Ajustes de la zona interna del panel de conexión
+   ========================= */
+
+/* El contenedor que envuelve todos los controles (lo que ahora se ve blanco) */
+.conn-body.open {
+  /* quitamos decisión de color dura aquí y se la damos por tema abajo */
+  border-radius: 12px;
+  border: 1px solid;
+  box-shadow: 0 24px 48px rgba(0,0,0,0.4),
+              0 2px 4px rgba(0,0,0,0.6);
+  padding: 16px;
+  margin-top: 12px;
+}
+
+/* LIGHT THEME versión interna */
+body.light .conn-body.open {
+  background: radial-gradient(circle at top left, #ffffff 0%, #fafafa 60%, #f8fafc 100%);
+  border-color: rgba(0,0,0,0.08);
+  box-shadow:
+    0 20px 40px rgba(0,0,0,0.05),
+    0 2px 4px rgba(0,0,0,0.08);
+}
+
+/* DARK THEME versión interna */
+body.dark .conn-body.open {
+  background: radial-gradient(circle at 10% 0%,
+    rgba(30, 27, 75, 0.25) 0%,    /* violeta translúcido arriba */
+    rgba(15, 23, 42, 0.6) 40%,    /* azul gris oscuro */
+    rgba(2, 6, 23, 0.4) 100%      /* casi negro translúcido */
+  );
+  border-color: rgba(168,85,247,0.25);
+  box-shadow:
+    0 30px 80px rgba(0,0,0,0.9),
+    0 2px 6px rgba(0,0,0,0.8);
+}
+
+/* el bloque .connection-form justo dentro de conn-body */
+.connection-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+  /* por defecto hereda color de texto del tema */
+  color: inherit;
+}
+
+/* labels y secciones intermedias como "Signed in (USER)" / "Language"
+   A veces se ven muy desaturados sobre el fondo oscuro.
+   Vamos a darles mejor contraste.
+*/
+body.dark .form-note {
+  color: #cbd5e1; /* un poquito más claro que #94a3b8 para más legibilidad */
+}
+
+/* Para la fila Language (label + select) y otros form-group,
+   aseguramos que el texto principal se vea claro en dark. */
+body.dark .form-group label {
+  color: #f8fafc; /* blanco casi completo */
+}
+
+/* Select & inputs ya los tocamos pero la fila completa (form-group.row / row-inline)
+   podría estar heredando un fondo blanco en hover de algo viejo.
+   Vamos a bloquear backgrounds blancos accidentales aquí también.
+*/
+body.dark .row-inline,
+body.dark .form-group,
+body.dark .form-group.row {
+  background: transparent;
+}
+
+/* El segmented control en dark ya lo estilizamos, pero la apariencia
+   del tab activo (MySQL) en tu captura se ve increíble (violeta + glow).
+   El resto de pestañas tiene gris con bevel. Perfecto.
+   Lo que evitamos es que la barra detrás de las pestañas se vea como "gris claro plástico".
+   Eso venía del fondo claro ahora mismo.
+*/
+body.dark .segmented {
+  background: rgba(15,23,42,0.9); /* más oscuro, para que no se vea como aluminio claro */
+  border-color: rgba(168,85,247,0.3);
+  box-shadow:
+    0 30px 80px rgba(0,0,0,0.9),
+    0 2px 6px rgba(0,0,0,0.8),
+    0 0 80px rgba(168,85,247,0.2) inset;
+}
+
+/* Mientras que en light mantenemos el look clarito gris/lila suave */
+body.light .segmented {
+  background: #f8f8fb;
+  border-color: #d9d9e3;
+  box-shadow:
+    0 2px 4px rgba(0,0,0,0.08) inset;
 }
