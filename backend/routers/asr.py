@@ -1,12 +1,35 @@
 # backend/routers/asr.py
 from fastapi import APIRouter, UploadFile, File, HTTPException
 import tempfile, os, shutil, subprocess
-import whisper
 
 router = APIRouter(prefix="/asr", tags=["asr"])
 
-# Carga 1 sola vez (elige "base" / "small")
-_model = whisper.load_model("base")
+# ------------------------------
+# Config vía variables de entorno
+# ------------------------------
+WHISPER_MODEL_NAME = os.getenv("WHISPER_MODEL", "tiny")           # tiny | base | small | ...
+WHISPER_DOWNLOAD_DIR = os.getenv("WHISPER_DOWNLOAD_DIR", "/data/.models")
+WHISPER_DEVICE = "cpu"                                            # Forzamos CPU en Render Free
+
+# Singleton del modelo (lazy load)
+_asr_model = None
+
+def _get_asr_model():
+    """
+    Carga el modelo Whisper una sola vez (lazy) y lo reutiliza.
+    """
+    global _asr_model
+    if _asr_model is None:
+        try:
+            import whisper  # import aquí para no cargar Torch hasta que sea necesario
+            _asr_model = whisper.load_model(
+                WHISPER_MODEL_NAME,
+                device=WHISPER_DEVICE,
+                download_root=WHISPER_DOWNLOAD_DIR
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error cargando Whisper: {e}")
+    return _asr_model
 
 def _find_ffmpeg() -> str:
     """
@@ -16,7 +39,7 @@ def _find_ffmpeg() -> str:
     p = shutil.which("ffmpeg")
     if p:
         return p
-    # 2) Intento de rutas comunes en Windows
+    # 2) Intento de rutas comunes en Windows (no afecta en Linux/Render)
     common = [
         r"C:\ffmpeg\bin\ffmpeg.exe",
         r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
@@ -75,8 +98,9 @@ async def transcribe(file: UploadFile = File(...)):
         # Convertir a WAV mono 16 kHz si hace falta
         out_path = _convert_to_wav(in_path)
 
-        # Transcribir (auto detección de idioma; fija language="es" si quieres forzar)
-        result = _model.transcribe(out_path, language=None)
+        # Cargar el modelo on-demand y transcribir (fp16=False en CPU)
+        model = _get_asr_model()
+        result = model.transcribe(out_path, language=None, fp16=False)
         text = (result.get("text") or "").strip()
         return {"text": text}
     finally:
