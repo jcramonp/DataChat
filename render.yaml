@@ -13,9 +13,9 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: AUTH_DB_URL             # apunta al disco persistente
-        value: sqlite:////data/auth.db
+        value: sqlite:////tmp/auth.db
       - key: UPLOAD_DIR
-        value: /data/uploads
+        value: /tmp/uploads
       - key: OPENAI_API_KEY          # márcalo como secreto en Render
         sync: false
       - key: ENABLE_ASR
