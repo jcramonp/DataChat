@@ -21,10 +21,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./
 
 # 4) Variables y carpetas usadas por tu app
-ENV UPLOAD_DIR=/data/uploads \
-    AUTH_DB_URL=sqlite:////data/auth.db \
+ENV UPLOAD_DIR=/tmp/uploads \
+    AUTH_DB_URL=sqlite:////tmp/auth.db \
     PORT=8000
-RUN mkdir -p /data/uploads
+RUN mkdir -p ${UPLOAD_DIR}
 
 EXPOSE 8000
 

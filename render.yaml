@@ -9,10 +9,6 @@ services:
     dockerfilePath: infra/Dockerfile.backend
     autoDeploy: true
     healthCheckPath: /health         # asegúrate de exponer /health en FastAPI
-    disk:                             # disco persistente para auth.db y uploads
-      name: backend-data
-      mountPath: /data
-      sizeGB: 1
     envVars:
       - key: JWT_SECRET
         generateValue: true
