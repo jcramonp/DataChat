@@ -1,9 +1,10 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import './NavBar.css';
 import Logo from './Logo';
-import { getAuth, clearAuth } from '../services/api';
+import { getAuth, clearAuth } from '../services/api.ts';
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../context/ThemeContext"; // ✅ nuevo import
+import { logoutServer} from '../services/api.ts';
 
 const LANGS = [
   { code: "en", label: "English" },
@@ -26,10 +27,12 @@ export default function NavBar() {
     </Link>
   );
 
-  const logout = () => {
-    clearAuth();
-    nav('/login', { replace: true });
-  };
+
+async function onLogout() {
+  try { await logoutServer(); } catch {}
+  clearAuth();
+  window.location.replace("/login");
+}
 
   const handleLangChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const lng = e.target.value;
@@ -91,7 +94,7 @@ export default function NavBar() {
               <span className="nav-pill" style={{ marginRight: 8 }}>
                 {(role || '').toUpperCase()}
               </span>
-              <button className="nav-pill" onClick={logout}>
+              <button className="nav-pill" onClick={onLogout}>
                 Logout
               </button>
             </>
