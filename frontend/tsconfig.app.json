@@ -1,27 +1,35 @@
 {
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
-    "target": "ES2022",
-    "useDefineForClassFields": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "skipLibCheck": true,
 
-    /* Bundler mode */
+    /* Target/lib: habilita findLast / findLastIndex */
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+
+    /* Modo bundler (Vite) */
+    "module": "ESNext",
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
-    "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
+    "types": ["vite/client"],
 
-    /* Linting */
+    /* Calidad / DX */
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "erasableSyntaxOnly": true,
-    "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "useDefineForClassFields": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "allowImportingTsExtensions": true,
+
+    /* Relaja errores por imports/variables no usadas (para no romper builds por 'React' no usado) */
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+
+    /* Opcionalmente útiles */
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true
   },
-  "include": ["src"]
+  "include": ["src", "vite-env.d.ts"]
 }

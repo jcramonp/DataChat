@@ -438,6 +438,7 @@ export default function MainPage() {
                         const res = await uploadExcel(file, auth.token);
                         setExcelFileId(res.file_id);
                         setExcelPath(file.name);
+                        setSheetName(0);
 
                         // ✅ mensaje de éxito
                         toast.success(t("toasts.uploadOk", "Archivo subido"));

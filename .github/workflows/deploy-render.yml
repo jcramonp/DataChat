@@ -1,0 +1,22 @@
+name: Deploy to Render
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Render blueprint deploy
+      - name: Deploy Render blueprint
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          curl -s -X POST \
+           -H "Authorization: Bearer $RENDER_API_KEY" \
+           -H "Content-Type: application/json" \
+           -d '{"repo":"'"${{ github.repository }}"'","branch":"main","rootDir":"infra"}' \
+           https://api.render.com/v1/services/blueprints

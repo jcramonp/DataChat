@@ -1,4 +1,4 @@
-import React from 'react';
+
 
 type Props = {
   size?: number; // alto del ícono

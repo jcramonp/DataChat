@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { login } from "../services/api";
 import { useTranslation } from "react-i18next";
-import { useAuth } from "../auth/authcontext";
+import { useAuth } from '../auth/AuthContext';
 
 /** Decode minimal JWT to infer role if backend doesn't send it */
 function roleFromToken(token?: string | null): "admin" | "user" | null {

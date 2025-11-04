@@ -1,0 +1,22 @@
+# Dockerfile.backend (fragmento recomendado)
+FROM python:3.11-slim
+
+# (Opcional) sistema base para libs nativas que algunas wheels usan
+# RUN apt-get update && apt-get install -y --no-install-recommends \
+#     ffmpeg build-essential gcc python3-dev && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# 1) Copia solo requirements para cachear la instalación
+COPY backend/requirements.txt ./requirements.txt
+
+# 2) Usa cache de pip (BuildKit) para acelerar reconstrucciones
+#   - Quita --no-cache-dir para que el cache mount sirva de algo.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
+
+# 3) Ahora sí, copia el resto del backend
+COPY backend/ ./
+
+# 4) (si corres uvicorn, etc.)
+# CMD ["python", "-m", "uvicorn", "app_min:app", "--host", "0.0.0.0", "--port", "8000"]
