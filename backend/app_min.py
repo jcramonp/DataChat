@@ -2101,6 +2101,19 @@ def excel_preview(
                     "rows": [],
                     "page": {"offset": offset, "limit": limit, "total": total},
                 }
+                # LOG
+                log_event(
+                    "info", "excel_preview",
+                    actor=(user.get("sub") or user.get("email") or ""),
+                    path="/excel/preview",
+                    meta={
+                        "file": os.path.basename(resolved_path),
+                        "sheet": str(target_sheet),
+                        "offset": offset, "limit": limit,
+                        "returned": 0
+                    }
+                )
+                return result
 
             window = df.iloc[offset: offset + limit]
             columns = list(window.columns.astype(str))
@@ -2120,11 +2133,24 @@ def excel_preview(
                 }
             )
 
-            return {
+            result = {
                 "columns": columns,
                 "rows": rows,
                 "page": {"offset": offset, "limit": limit, "total": total},
             }
+            # LOG
+            log_event(
+                "info", "excel_preview",
+                actor=(user.get("sub") or user.get("email") or ""),
+                path="/excel/preview",
+                meta={
+                    "file": os.path.basename(resolved_path),
+                    "sheet": str(target_sheet),
+                    "offset": offset, "limit": limit,
+                    "returned": len(rows)
+                }
+            )
+            return result
 
         elif ext == ".csv":
             # --- CSV tal cual lo tenías ---
@@ -2148,6 +2174,19 @@ def excel_preview(
                     "rows": [],
                     "page": {"offset": offset, "limit": limit, "total": total},
                 }
+                # LOG
+                log_event(
+                    "info", "excel_preview",
+                    actor=(user.get("sub") or user.get("email") or ""),
+                    path="/excel/preview",
+                    meta={
+                        "file": os.path.basename(resolved_path),
+                        "sheet": "__csv__",
+                        "offset": offset, "limit": limit,
+                        "returned": 0
+                    }
+                )
+                return result
 
             window = pd.read_csv(
                 resolved_path,
@@ -2177,6 +2216,19 @@ def excel_preview(
                 "rows": rows,
                 "page": {"offset": offset, "limit": limit, "total": total},
             }
+            # LOG
+            log_event(
+                "info", "excel_preview",
+                actor=(user.get("sub") or user.get("email") or ""),
+                path="/excel/preview",
+                meta={
+                    "file": os.path.basename(resolved_path),
+                    "sheet": "__csv__",
+                    "offset": offset, "limit": limit,
+                    "returned": len(rows)
+                }
+            )
+            return result
 
         else:
             raise HTTPException(status_code=400, detail=f"Extensión no soportada: {ext}")
