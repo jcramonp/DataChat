@@ -2009,23 +2009,43 @@ def excel_sheets(
 
     try:
         if ext in {".xlsx", ".xls"}:
-            # Leer nombres de hojas
-            # pd.ExcelFile es eficiente para solo listar hojas
-            with pd.ExcelFile(resolved_path) as xf:
-                log_event("info", "excel_sheets", actor=user.get("sub") or user.get("email"),
-                          path="/excel/sheets", meta={"file": os.path.basename(resolved_path), "sheets": len(sheets)})
-                return {"sheets": xf.sheet_names}
+            # Usa xlrd para .xls; para .xlsx deja que pandas elija (openpyxl)
+            engine = "xlrd" if ext == ".xls" else None
+            with pd.ExcelFile(resolved_path, engine=engine) as xf:
+                sheet_names = xf.sheet_names
+            log_event(
+                "info",
+                "excel_sheets",
+                actor=(user.get("sub") or user.get("email")),
+                path="/excel/sheets",
+                meta={"file": os.path.basename(resolved_path), "sheets": len(sheet_names)},
+            )
+            return {"sheets": sheet_names}
+
         elif ext == ".csv":
-            # Para CSV no hay hojas; devolvemos un placeholder
-            log_event("info", "excel_sheets", actor=user.get("sub") or user.get("email"),
-                      path="/excel/sheets", meta={"file": os.path.basename(resolved_path), "sheets": 1, "csv": True})
+            # CSV no tiene hojas
+            log_event(
+                "info",
+                "excel_sheets",
+                actor=(user.get("sub") or user.get("email")),
+                path="/excel/sheets",
+                meta={"file": os.path.basename(resolved_path), "sheets": 1, "csv": True},
+            )
             return {"sheets": ["__csv__"]}
+
         else:
             raise HTTPException(status_code=400, detail=f"Extensión no soportada: {ext}")
+
+    except ImportError as e:
+        # Mensaje claro si falta xlrd para .xls
+        if ext == ".xls" and "xlrd" in str(e).lower():
+            raise HTTPException(status_code=400, detail="Para leer .xls instala xlrd (pip install xlrd).")
+        raise
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"No fue posible leer el archivo: {e}")
+
 
     
 @app.get("/excel/preview")
@@ -2048,88 +2068,87 @@ def excel_preview(
 
     try:
         if ext in {".xlsx", ".xls"}:
-            # Si no viene sheet_name, usar 0 (primera hoja)
-            target_sheet = 0 if sheet_name is None else sheet_name
+            # --- Normaliza sheet_name para Excel ---
+            def _norm_sheet(s):
+                if s is None:
+                    return 0
+                if isinstance(s, str):
+                    s2 = s.strip()
+                    if s2 == "" or s2 == "__csv__":
+                        return 0
+                    try:
+                        return int(s2)  # si viene "0", "1", ...
+                    except Exception:
+                        return s2        # nombre de hoja
+                return s
 
-            # Cargar hoja completa para conocer el total (suficiente para previews)
-            df = pd.read_excel(resolved_path, sheet_name=target_sheet)
+            target_sheet = _norm_sheet(sheet_name)
+
+            # --- Usa xlrd para .xls; openpyxl por defecto para .xlsx ---
+            engine = "xlrd" if ext == ".xls" else None
+            df = pd.read_excel(resolved_path, sheet_name=target_sheet, engine=engine)
 
             total = int(len(df))
             if offset >= total:
-                result = {
+                log_event(
+                    "info", "excel_preview",
+                    actor=(user.get("sub") or user.get("email")),
+                    path="/excel/preview",
+                    meta={"file": os.path.basename(resolved_path), "sheet": target_sheet, "returned": 0, "total": total}
+                )
+                return {
                     "columns": list(df.columns.astype(str)),
                     "rows": [],
                     "page": {"offset": offset, "limit": limit, "total": total},
                 }
-                # LOG
-                log_event(
-                    "info", "excel_preview",
-                    actor=(user.get("sub") or user.get("email") or ""),
-                    path="/excel/preview",
-                    meta={
-                        "file": os.path.basename(resolved_path),
-                        "sheet": str(target_sheet),
-                        "offset": offset, "limit": limit,
-                        "returned": 0
-                    }
-                )
-                return result
 
             window = df.iloc[offset: offset + limit]
             columns = list(window.columns.astype(str))
-            rows = window.where(pd.notna(window), None).values.tolist()  # NaN -> None
+            rows = window.where(pd.notna(window), None).values.tolist()
 
-            result = {
+            log_event(
+                "info", "excel_preview",
+                actor=(user.get("sub") or user.get("email")),
+                path="/excel/preview",
+                meta={
+                    "file": os.path.basename(resolved_path),
+                    "sheet": target_sheet,
+                    "returned": len(rows),
+                    "total": total,
+                    "offset": offset,
+                    "limit": limit
+                }
+            )
+
+            return {
                 "columns": columns,
                 "rows": rows,
                 "page": {"offset": offset, "limit": limit, "total": total},
             }
-            # LOG
-            log_event(
-                "info", "excel_preview",
-                actor=(user.get("sub") or user.get("email") or ""),
-                path="/excel/preview",
-                meta={
-                    "file": os.path.basename(resolved_path),
-                    "sheet": str(target_sheet),
-                    "offset": offset, "limit": limit,
-                    "returned": len(rows)
-                }
-            )
-            return result
 
         elif ext == ".csv":
-            # 1) Columnas
+            # --- CSV tal cual lo tenías ---
             head_df = pd.read_csv(resolved_path, nrows=0)
             columns = list(head_df.columns.astype(str))
 
-            # 2) Total rápido (descontar header)
             with open(resolved_path, "r", encoding="utf-8", errors="ignore") as f:
                 total = sum(1 for _ in f) - 1
                 if total < 0:
                     total = 0
 
             if offset >= total:
-                result = {
+                log_event(
+                    "info", "excel_preview",
+                    actor=(user.get("sub") or user.get("email")),
+                    path="/excel/preview",
+                    meta={"file": os.path.basename(resolved_path), "csv": True, "returned": 0, "total": total}
+                )
+                return {
                     "columns": columns,
                     "rows": [],
                     "page": {"offset": offset, "limit": limit, "total": total},
                 }
-                # LOG
-                log_event(
-                    "info", "excel_preview",
-                    actor=(user.get("sub") or user.get("email") or ""),
-                    path="/excel/preview",
-                    meta={
-                        "file": os.path.basename(resolved_path),
-                        "sheet": "__csv__",
-                        "offset": offset, "limit": limit,
-                        "returned": 0
-                    }
-                )
-                return result
 
-            # 3) Ventana exacta
             window = pd.read_csv(
                 resolved_path,
                 skiprows=range(1, 1 + offset),  # saltar header + offset
@@ -2139,54 +2158,37 @@ def excel_preview(
             window.columns = columns
             rows = window.where(pd.notna(window), None).values.tolist()
 
-            result = {
+            log_event(
+                "info", "excel_preview",
+                actor=(user.get("sub") or user.get("email")),
+                path="/excel/preview",
+                meta={
+                    "file": os.path.basename(resolved_path),
+                    "csv": True,
+                    "returned": len(rows),
+                    "total": total,
+                    "offset": offset,
+                    "limit": limit
+                }
+            )
+
+            return {
                 "columns": columns,
                 "rows": rows,
                 "page": {"offset": offset, "limit": limit, "total": total},
             }
-            # LOG
-            log_event(
-                "info", "excel_preview",
-                actor=(user.get("sub") or user.get("email") or ""),
-                path="/excel/preview",
-                meta={
-                    "file": os.path.basename(resolved_path),
-                    "sheet": "__csv__",
-                    "offset": offset, "limit": limit,
-                    "returned": len(rows)
-                }
-            )
-            return result
 
         else:
             raise HTTPException(status_code=400, detail=f"Extensión no soportada: {ext}")
 
-    except HTTPException:
+    except ImportError as e:
+        # Mensaje claro si falta xlrd para .xls
+        if ext == ".xls" and "xlrd" in str(e).lower():
+            raise HTTPException(status_code=400, detail="Para leer .xls instala xlrd (pip install xlrd).")
         raise
     except ValueError as ve:
-        # p. ej. sheet_name inválido
-        log_event(
-            "error", "excel_preview_failed",
-            actor=(user.get("sub") or user.get("email") or ""),
-            path="/excel/preview",
-            meta={
-                "file": os.path.basename(resolved_path),
-                "sheet": str(sheet_name),
-                "offset": offset, "limit": limit,
-                "error": f"ValueError: {ve}"
-            }
-        )
         raise HTTPException(status_code=400, detail=f"Parámetros inválidos: {ve}")
+    except HTTPException:
+        raise
     except Exception as e:
-        log_event(
-            "error", "excel_preview_failed",
-            actor=(user.get("sub") or user.get("email") or ""),
-            path="/excel/preview",
-            meta={
-                "file": os.path.basename(resolved_path),
-                "sheet": str(sheet_name),
-                "offset": offset, "limit": limit,
-                "error": str(e)
-            }
-        )
         raise HTTPException(status_code=400, detail=f"No fue posible previsualizar el archivo: {e}")

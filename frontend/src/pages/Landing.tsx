@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import Logo from "../components/Logo";
 import "../components/NavBar.css";
 import "./Landing.css";
-import { useAuth } from "../auth/authcontext"; // 👈 importamos el contexto
+import { useAuth } from '../auth/AuthContext';
 
 export default function Landing() {
   const { t } = useTranslation();

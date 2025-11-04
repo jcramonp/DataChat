@@ -1,0 +1,26 @@
+version: "3.9"
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.backend
+    environment:
+      JWT_SECRET: dev
+      OPENAI_API_KEY: replace_me
+      AUTH_DB_URL: sqlite:////data/auth.db
+      UPLOAD_DIR: /data/uploads
+      MAX_FILE_MB: "25"
+    volumes:
+      - backend_data:/data
+    ports:
+      - "8000:8000"
+  frontend:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.frontend
+    environment:
+      VITE_API_URL: http://localhost:8000
+    ports:
+      - "8080:8080"
+volumes:
+  backend_data:
