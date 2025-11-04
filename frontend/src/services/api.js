@@ -1,4 +1,10 @@
-const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+// src/services/api.js
+const API_URL = (() => {
+  const v = import.meta?.env?.VITE_API_URL;
+  if (!v) throw new Error("VITE_API_URL is not set");
+  // quitamos "/" finales para evitar URLs con doble barra
+  return String(v).replace(/\/+$/, "");
+})();
 
 const TOKEN_KEY = "dc_token";
 const ROLE_KEY = "dc_role";
@@ -231,8 +237,7 @@ export async function previewExcelById(fileId, sheet, offset, limit, token) {
   return r.json();
 }
 
-
-export async function listAdminLogs({ limit=100, offset=0, level="", action="", q="" } = {}) {
+export async function listAdminLogs({ limit = 100, offset = 0, level = "", action = "", q = "" } = {}) {
   const { token } = getAuth();
   const params = new URLSearchParams();
   params.set("limit", String(limit));

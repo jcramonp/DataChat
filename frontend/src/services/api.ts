@@ -1,6 +1,13 @@
 // src/services/api.ts
-export const API_URL: string =
-  (import.meta as any).env?.VITE_API_URL || 'http://127.0.0.1:8000';
+const _API_URL_ENV = (import.meta as any).env?.VITE_API_URL as string | undefined;
+
+if (!_API_URL_ENV) {
+  // Fail fast: así nunca intentará 127.0.0.1 en producción
+  throw new Error('VITE_API_URL is not set');
+}
+
+// Normalizamos quitando cualquier "/" final para evitar "//" al concatenar
+export const API_URL: string = _API_URL_ENV.replace(/\/+$/, '');
 
 const TOKEN_KEY = 'dc_token';
 const ROLE_KEY = 'dc_role';
