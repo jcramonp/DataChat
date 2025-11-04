@@ -2,38 +2,23 @@ services:
   - type: web
     name: datachat-backend
     env: docker
-    region: oregon            # o el que prefieras
-    plan: starter             # ajusta al plan que tengas
+    plan: free
     dockerfilePath: infra/Dockerfile.backend
-    autoDeploy: true
-    healthCheckPath: /admin/ping
     envVars:
       - key: JWT_SECRET
-        sync: false           # lo pones como Secret en Render
-      - key: LLM_MODEL
-        value: gpt-4.1-mini
+        generateValue: true
+      - key: AUTH_DB_URL
+        value: sqlite:////tmp/auth.db
+      - key: UPLOAD_DIR
+        value: /tmp/uploads
       - key: OPENAI_API_KEY
         sync: false
-      - key: AUTH_DB_URL
-        value: sqlite:////data/auth.db
-      - key: UPLOAD_DIR
-        value: /data/uploads
-      - key: MAX_FILE_MB
-        value: "25"
-      - key: CORS_ORIGINS
-        value: "*"
-    disk:
-      name: data
-      mountPath: /data
-      sizeGB: 1
 
   - type: web
     name: datachat-frontend
     env: docker
-    region: oregon
-    plan: starter
+    plan: free
     dockerfilePath: infra/Dockerfile.frontend
-    autoDeploy: true
     envVars:
       - key: VITE_API_URL
-        value: https://datachat-backend.onrender.com  # Render te da la URL exacta tras crear el servicio backend
+        value: https://<TU_BACKEND_ON_RENDER>.onrender.com
