@@ -1,24 +1,43 @@
 services:
+  # =========================
+  # Backend (FastAPI + Uvicorn)
+  # =========================
   - type: web
     name: datachat-backend
     env: docker
     plan: free
     dockerfilePath: infra/Dockerfile.backend
+    autoDeploy: true
+    healthCheckPath: /health         # asegúrate de exponer /health en FastAPI
+    disk:                             # disco persistente para auth.db y uploads
+      name: backend-data
+      mountPath: /data
+      sizeGB: 1
     envVars:
       - key: JWT_SECRET
         generateValue: true
-      - key: AUTH_DB_URL
-        value: sqlite:////tmp/auth.db
+      - key: AUTH_DB_URL             # apunta al disco persistente
+        value: sqlite:////data/auth.db
       - key: UPLOAD_DIR
-        value: /tmp/uploads
-      - key: OPENAI_API_KEY
+        value: /data/uploads
+      - key: OPENAI_API_KEY          # márcalo como secreto en Render
         sync: false
 
+  # =========================
+  # Frontend (Nginx sirviendo Vite build)
+  # =========================
   - type: web
     name: datachat-frontend
     env: docker
     plan: free
     dockerfilePath: infra/Dockerfile.frontend
+    autoDeploy: true
     envVars:
+      # Opción simple: después del primer deploy, reemplaza la URL por la del backend que te da Render
       - key: VITE_API_URL
-        value: https://<TU_BACKEND_ON_RENDER>.onrender.com
+        value: https://datachat-backend.onrender.com
+      # ─────────────────────────────────────────────────────────────────────────
+      # Si prefieres evitar editarlo a mano, Render permite inyectar desde otro
+      # servicio, pero es menos portátil y puede variar según la cuenta/region.
+      # Déjalo así por simplicidad, y cámbialo luego en el panel si la URL difiere.
+      # ─────────────────────────────────────────────────────────────────────────

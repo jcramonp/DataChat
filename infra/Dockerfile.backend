@@ -1,22 +1,36 @@
-# Dockerfile.backend (fragmento recomendado)
+# infra/Dockerfile.backend
 FROM python:3.11-slim
 
-# (Opcional) sistema base para libs nativas que algunas wheels usan
-# RUN apt-get update && apt-get install -y --no-install-recommends \
-#     ffmpeg build-essential gcc python3-dev && rm -rf /var/lib/apt/lists/*
+# Cosas útiles de entorno
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# 1) Copia solo requirements para cachear la instalación
+# 1) Instala deps de sistema que a veces piden algunas wheels (opcional pero útil)
+#    si no usas ffmpeg puedes quitarlo.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential gcc ffmpeg \
+ && rm -rf /var/lib/apt/lists/*
+
+# 2) Instala Python deps
 COPY backend/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# 2) Usa cache de pip (BuildKit) para acelerar reconstrucciones
-#   - Quita --no-cache-dir para que el cache mount sirva de algo.
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install -r requirements.txt
-
-# 3) Ahora sí, copia el resto del backend
+# 3) Copia el código
 COPY backend/ ./
 
-# 4) (si corres uvicorn, etc.)
-# CMD ["python", "-m", "uvicorn", "app_min:app", "--host", "0.0.0.0", "--port", "8000"]
+# 4) Variables y carpetas usadas por tu app
+ENV UPLOAD_DIR=/data/uploads \
+    AUTH_DB_URL=sqlite:////data/auth.db \
+    PORT=8000
+RUN mkdir -p /data/uploads
+
+EXPOSE 8000
+
+# (Opcional) Healthcheck interno. En Render también puedes usar healthCheckPath en render.yaml
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s CMD \
+  python -c "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.getenv('PORT','8000') + '/health').read()" || exit 1
+
+# 5) ¡Muy importante! Arrancar Uvicorn escuchando en $PORT (Render lo inyecta)
+CMD ["bash","-lc","uvicorn app_min:app --host 0.0.0.0 --port ${PORT:-8000}"]
