@@ -1,0 +1,15 @@
+1. Show me the total sales for the last full month.
+2. Which product had the highest revenue in the last quarter?
+3. List the top 5 customers by total purchase amount this year.
+4. Show the total number of orders grouped by city.
+5. Filter the sales data to only show orders from customers in Medellín in 2024.
+6. Calculate the average order value for the last 30 days.
+7. Show me a monthly sales trend for the current year.
+8. Which product category has the lowest number of returns?
+9. Explain what this SQL query does: SELECT city, SUM(total_amount) FROM orders GROUP BY city;
+10. If there is no data for the selected date range, how should the system respond?
+11. A user asks: "Why is my sales total zero?" — generate a helpful explanation of possible reasons based on the data.
+12. Compare the total sales between this year and last year and tell me which one is higher.
+13. Show all orders that were paid with credit card and have a total greater than 500.
+14. Detect any anomalies or unusual spikes in sales over the last six months.
+15. Summarize in natural language the main insights from the sales data for the last quarter (focus on best products, customers, and regions).
