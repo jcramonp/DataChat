@@ -36,7 +36,7 @@ export default function SessionGuard() {
           return;
         }
 
-        const r = await pingAuth(token);    // { remaining_seconds }
+        const r = await pingAuth();    // { remaining_seconds }
         const left = Math.max(0, Number(r?.remaining_seconds ?? 0));
         setRemaining(left);
         setWarn(left > 0 && left <= WARNING_SECONDS);
@@ -49,8 +49,10 @@ export default function SessionGuard() {
         }
       } catch (e: any) {
         // 401/errores: tratamos como caída de sesión
-        clearAuth();
-        window.location.replace("/login");
+        if (e?.status === 401) {
+          clearAuth();
+          window.location.replace("/login");
+        }
       }
     };
 
