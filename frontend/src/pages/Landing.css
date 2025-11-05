@@ -1,52 +1,153 @@
+/* Wrapper exterior de la landing */
 .landing-wrap {
-  padding: 40px 16px;
+  max-width: 1100px;
+  margin: 2rem auto 0 auto;
+  padding: 0 1rem 4rem;
+  display: flex;
+  justify-content: center;
 }
-.hero-card {
+
+/* ===== HERO CARD ===== */
+/* Light version: mantiene tu look pastel actual */
+body.light .landing-hero-card {
   max-width: 1080px;
-  margin: 0 auto;
+  width: 100%;
   text-align: center;
-  background: radial-gradient(120% 120% at 20% -10%, #f3f1fb 0%, #efe9fb 35%, #e7f0ff 100%);
+
+  background: radial-gradient(
+    120% 120% at 20% -10%,
+    #f3f1fb 0%,
+    #efe9fb 35%,
+    #e7f0ff 100%
+  );
+
   border: 1px solid #e7e3ef;
   border-radius: 20px;
   padding: 48px 24px;
-  box-shadow: 0 6px 18px rgba(20, 30, 60, 0.06);
+
+  box-shadow:
+    0 6px 18px rgba(20, 30, 60, 0.06),
+    0 30px 80px rgba(0,0,0,0.06);
+
+  color: #111827;
 }
-.hero-logo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  justify-content: center;
+
+/* Dark version: glass violeta/azul consistente con el dashboard */
+body.dark .landing-hero-card {
+  max-width: 1080px;
+  width: 100%;
+  text-align: center;
+
+  background: radial-gradient(
+    circle at top left,
+    rgba(30,27,75,0.6) 0%,
+    rgba(15,23,42,0.6) 40%,
+    rgba(2,6,23,0.4) 100%
+  );
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+
+  border: 1px solid rgba(168,85,247,0.25);
+  border-radius: 20px;
+  padding: 48px 24px;
+
+  box-shadow:
+    0 60px 180px rgba(0,0,0,0.95),
+    0 8px 16px rgba(0,0,0,0.8),
+    0 0 120px rgba(168,85,247,0.25);
+
+  color: #f8fafc;
 }
-.hero-logo h1 {
-  font-size: 48px;
-  color: #1b57f1;
-  margin: 0;
-  font-weight: 900;
-}
-.hero-logo-icon {
-  width: 60px;
-  height: 60px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #2f6bff, #c96df1);
-}
-.hero-title {
+
+/* ===== HEADLINE ===== */
+.hero-headline {
   margin: 16px 0 8px;
-  font-size: 32px;
-  color: #2f56ff;
-  font-weight: 900;
+  font-size: clamp(1.8rem, 1vw + 1.2rem, 2.2rem);
+  font-weight: 800;
+  line-height: 1.2;
+  color: inherit;
+  text-align: center;
+  text-wrap: balance;
+  text-shadow:
+    0 20px 60px rgba(0,0,0,0.6),
+    0 2px 4px rgba(0,0,0,0.8);
 }
-.hero-sub {
+
+/* ===== SUBTÍTULO ===== */
+.hero-desc {
   margin: 0 auto 28px;
   max-width: 720px;
-  color: #515a78;
+  font-size: 0.95rem;
+  font-weight: 400;
+  line-height: 1.5;
+  text-align: center;
+
+  color: #515a78; /* tu gris original */
 }
+
+body.dark .hero-desc {
+  color: #94a3b8; /* slate-400 / gris azulado suave */
+  text-shadow:
+    0 20px 60px rgba(0,0,0,0.8),
+    0 2px 4px rgba(0,0,0,0.8);
+}
+
+/* ===== CTA BUTTON ===== */
 .cta-btn {
   display: inline-block;
+  min-width: 150px;
+  text-align: center;
+
   padding: 16px 28px;
   border-radius: 16px;
-  color: #fff;
   text-decoration: none;
   font-weight: 800;
-  background: linear-gradient(135deg, #4b6bff, #f18be2);
-  box-shadow: 0 8px 16px rgba(90, 80, 200, 0.25);
+  font-size: 0.9rem;
+  line-height: 1.3;
+  color: #fff;
+  border: 0;
+  cursor: pointer;
+
+  background: radial-gradient(
+    circle at 30% 20%,
+    rgba(75,107,255,1) 0%,     /* azul/violeta */
+    rgba(111,66,255,1) 40%,    /* morado */
+    rgba(241,139,226,1) 100%   /* rosa violeta */
+  );
+
+  box-shadow:
+    0 20px 60px rgba(90,80,200,0.4),
+    0 2px 4px rgba(0,0,0,0.6),
+    0 0 60px rgba(111,66,255,0.4);
+
+  transition: box-shadow .12s ease, transform .12s ease;
+}
+
+body.dark .cta-btn {
+  background: radial-gradient(
+    circle at 30% 20%,
+    rgba(168,85,247,1) 0%,
+    rgba(99,102,241,1) 40%,
+    rgba(49,46,129,0.9) 100%
+  );
+
+  box-shadow:
+    0 30px 80px rgba(168,85,247,0.55),
+    0 4px 8px rgba(0,0,0,0.9),
+    0 0 80px rgba(168,85,247,0.4);
+}
+
+.cta-btn:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 30px 80px rgba(90,80,200,0.5),
+    0 4px 8px rgba(0,0,0,0.8),
+    0 0 80px rgba(111,66,255,0.5);
+}
+
+body.dark .cta-btn:hover {
+  box-shadow:
+    0 40px 100px rgba(168,85,247,0.6),
+    0 6px 12px rgba(0,0,0,0.95),
+    0 0 110px rgba(168,85,247,0.5);
 }

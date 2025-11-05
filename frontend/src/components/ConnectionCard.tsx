@@ -70,9 +70,27 @@ export default function ConnectionCard(props: Props) {
   } = props;
 
   return (
-    <div className="connection-card">
-      <div className="connection-header">
-        <h3>{title}</h3>
+    <div
+      className="connection-card panel" // ⬅️ panel para tema light/dark
+      style={{
+        marginTop: "24px",
+        borderRadius: "12px",
+      }}
+    >
+      <div
+        className="connection-header panel-header" // ⬅️ panel-header para barra superior
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "12px 16px",
+          fontWeight: 500,
+          fontSize: "16px",
+          lineHeight: 1.4,
+        }}
+      >
+        <h3 style={{ margin: 0 }}>{title}</h3>
+
         <button
           type="button"
           className="toggle-button"
@@ -80,6 +98,16 @@ export default function ConnectionCard(props: Props) {
           aria-expanded={show}
           aria-controls="conn-body"
           title={show ? hideText : showText}
+          style={{
+            // importante: que parezca link moradito consistente con el tema
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            fontSize: "14px",
+            fontWeight: 500,
+            lineHeight: 1.4,
+            color: "rgb(109, 40, 217)", // morado claro, se ve bien en ambos temas
+          }}
         >
           {show ? hideText : showText}
         </button>
@@ -89,6 +117,9 @@ export default function ConnectionCard(props: Props) {
         id="conn-body"
         className={`conn-body ${show ? "open" : "closed"}`}
         aria-hidden={!show}
+        style={{
+          padding: show ? "16px" : undefined,
+        }}
       >
         {!show ? null : (
           <div className="connection-form">
@@ -132,6 +163,7 @@ export default function ConnectionCard(props: Props) {
 
             {/* Sesión / Idioma */}
             <div className="form-note">{signedText}</div>
+
             <div className="form-group">
               <label>{langLabel}</label>
               <select

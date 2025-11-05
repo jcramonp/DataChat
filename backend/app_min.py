@@ -304,12 +304,36 @@ async def http_exception_logger(request: Request, exc: HTTPException):
 # ========= Seguridad / JWT =========
 JWT_SECRET = os.getenv("JWT_SECRET", "dev")     # cámbialo en prod
 JWT_ALG = "HS256"
-JWT_EXPIRE_MINUTES = 120
+JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "120"))
+SESSION_INACTIVITY_SECONDS = int(os.getenv("SESSION_INACTIVITY_SECONDS", "900"))  # 15 mins
 
 # Usa Argon2 (evita líos de bcrypt en Windows)
 pwd_ctx = CryptContext(schemes=["argon2"], deprecated="auto")
 
 auth_scheme = HTTPBearer(auto_error=True)
+
+from fastapi import BackgroundTasks
+import asyncio
+
+@app.on_event("startup")
+async def _session_reaper_start():
+    async def _reaper():
+        while True:
+            now = int(time())
+            to_revoke = []
+            for jti, s in list(SESSIONS.items()):
+                last = getattr(s, "last_seen", None)
+                if last is None:
+                    continue
+                if (now - int(last)) >= SESSION_INACTIVITY_SECONDS and not getattr(s, "revoked", False):
+                    to_revoke.append(jti)
+            for jti in to_revoke:
+                s = SESSIONS.get(jti)
+                if s:
+                    s.revoked = True
+                    SESSIONS[jti] = s
+            await asyncio.sleep(30)  # corre cada 30s
+    asyncio.create_task(_reaper())
 
 class SessionOut(BaseModel):
     jti: str
@@ -322,6 +346,14 @@ class SessionOut(BaseModel):
 
 SESSIONS: dict[str, dict] = {}
 
+from datetime import datetime, timezone
+
+def _touch_session(jti: str):
+    """Actualiza la hora de última actividad de una sesión."""
+    s = SESSIONS.get(jti)
+    if s and not getattr(s, "revoked", False):
+        s.last_seen = int(datetime.now(tz=timezone.utc).timestamp())
+        SESSIONS[jti] = s
 
 def require_jwt(credentials: HTTPAuthorizationCredentials = Depends(auth_scheme)) -> dict:
     token = credentials.credentials
@@ -337,9 +369,9 @@ def require_jwt(credentials: HTTPAuthorizationCredentials = Depends(auth_scheme)
     if not s or s.revoked:
         raise HTTPException(status_code=401, detail="Sesión inválida o revocada")
 
-    s.last_seen = int(datetime.now(tz=timezone.utc).timestamp())
-    SESSIONS[jti] = s
+    _touch_session(jti)  # ✅ aquí actualiza la actividad
     return payload
+
 
 
 def require_non_admin(token: HTTPAuthorizationCredentials = Depends(auth_scheme)):
@@ -348,11 +380,18 @@ def require_non_admin(token: HTTPAuthorizationCredentials = Depends(auth_scheme)
     except PyJWTError as e:
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 
-    role = (payload.get("role") or payload.get("rol") or payload.get("perfil") or "").lower()
+    jti = payload.get("jti")
+    s = SESSIONS.get(jti)
+    if not s or getattr(s, "revoked", False):
+        raise HTTPException(status_code=401, detail="Sesión inválida o revocada")
 
+    _touch_session(jti)  # ✅ actualiza la hora de actividad
+
+    role = (payload.get("role") or "").lower()
     if role == "admin":
         raise HTTPException(status_code=403, detail="Admins cannot use the chatbot")
     return payload
+
 
 def create_jwt(sub: str, role: str, extra: dict | None = None) -> str:
     now = int(datetime.now(tz=timezone.utc).timestamp())
@@ -418,6 +457,15 @@ def admin_list_sessions(_: dict = Depends(require_roles(["admin"]))):
         "items": out,
         "total": len(out),
     }
+
+@app.get("/auth/ping")
+def auth_ping(payload: dict = Depends(require_jwt)):
+    jti = payload.get("jti")
+    s = SESSIONS.get(jti)
+    now = int(time())
+    last = int(getattr(s, "last_seen", now)) if s else now
+    remaining = max(0, SESSION_INACTIVITY_SECONDS - (now - last))
+    return {"now": now, "last_seen": last, "remaining_seconds": remaining}
 
 @app.delete("/admin/sessions/{jti}")
 def admin_revoke_session(
@@ -545,8 +593,24 @@ def auth_login(req: LoginRequest, db: Session = Depends(get_db)):
         revoked=False,
     )
 
+    # 🔎 DEBUG: imprime duración real del token
+    ttl_min = int((payload["exp"] - payload["iat"]) / 60)
+    print(f"[auth] token expira en {ttl_min} min (iat={payload['iat']}, exp={payload['exp']})")
+    print(f"[env] JWT_EXPIRE_MINUTES = {JWT_EXPIRE_MINUTES}")
+    print(f"[env] SESSION_INACTIVITY_SECONDS = {SESSION_INACTIVITY_SECONDS}")
+
     log_event("info", "login", actor=email, path="/auth/login", meta={"role": u.role})
-    return {"access_token": token, "token_type": "bearer", "role": u.role}
+
+    # ⬅️ Devuelve expiración al front para que no use timers mágicos
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "role": u.role,
+        "expires_at": payload["exp"],                  # epoch seconds
+        "inactivity_seconds": SESSION_INACTIVITY_SECONDS,
+        "jti": jti,
+    }
+
 
 
 @app.post("/auth/register")

@@ -2,6 +2,12 @@
 export const API_URL: string =
   (import.meta as any).env?.VITE_API_URL || 'http://127.0.0.1:8000';
 
+// Helper opcional para compatibilidad
+export function apiBase(): string {
+  return API_URL;
+}
+
+// --- storage keys ---
 const TOKEN_KEY = 'dc_token';
 const ROLE_KEY = 'dc_role';
 
@@ -14,7 +20,7 @@ export type ChatOptions = {
 };
 
 export type MySQLSource = { type: 'mysql'; sqlalchemy_url: string };
-// Modo legacy por path (lo mantengo porque tu MainPage lo usa en algunos sitios)
+// Modo legacy por path (se mantiene por compatibilidad)
 export type ExcelSource = { type: 'excel'; path: string; sheet_name?: number | string | null };
 export type SavedSource = { type: 'saved'; connection_id: number };
 export type DataSource = MySQLSource | ExcelSource | SavedSource;
@@ -28,7 +34,7 @@ export type Generated = { type: 'sql' | 'pandas'; code: string };
 
 // ChatResponse real del backend
 export type ChatResponse = {
-  answer_text: string;              // <-- tu backend devuelve answer_text
+  answer_text: string;
   table?: TableData | null;
   generated: Generated;
   notices?: string[];
@@ -93,12 +99,9 @@ export function setAuth(p: { token?: string; role?: string }) {
   if (p.role) localStorage.setItem(ROLE_KEY, p.role);
   else localStorage.removeItem(ROLE_KEY);
 
-  // opcional: también guarda el objeto combinado para compatibilidad con tu versión previa
+  // compat legacy: guarda objeto combinado
   if (p.token || p.role) {
-    const merged = {
-      token: p.token ?? '',
-      role: p.role ?? '',
-    };
+    const merged = { token: p.token ?? '', role: p.role ?? '' };
     localStorage.setItem('auth', JSON.stringify(merged));
   }
 }
@@ -112,7 +115,7 @@ export function clearAuth() {
 /**
  * Compatibilidad:
  * - Primero intenta leer dc_token/dc_role (formato nuevo).
- * - Si no existen, intenta el JSON "auth" que usabas antes.
+ * - Si no existen, intenta el JSON "auth" legacy.
  */
 export function getAuth(): { token: string; role: string } {
   const tk = localStorage.getItem(TOKEN_KEY);
@@ -123,10 +126,7 @@ export function getAuth(): { token: string; role: string } {
     const raw = localStorage.getItem('auth');
     if (!raw) return { token: '', role: '' };
     const parsed = JSON.parse(raw);
-    return {
-      token: parsed?.token ?? '',
-      role: parsed?.role ?? '',
-    };
+    return { token: parsed?.token ?? '', role: parsed?.role ?? '' };
   } catch {
     return { token: '', role: '' };
   }
@@ -153,12 +153,15 @@ class ResponseError extends Error {
     this.status = status;
   }
 }
+
 async function errorFromResponse(r: Response): Promise<ResponseError> {
   let message = `${r.status} ${r.statusText}`;
   try {
     const data = await r.json();
     if (data && data.detail) {
       message = Array.isArray(data.detail) ? data.detail[0]?.msg || message : data.detail;
+    } else if (data && data.message) {
+      message = data.message;
     }
   } catch {
     // ignore
@@ -204,6 +207,23 @@ export async function logoutServer() {
   }).catch(() => {});
 }
 
+// ===== Ping de sesión (nuevo) =====
+// Reemplaza la definición actual por esta:
+export async function pingAuth(): Promise<{ now: number; last_seen: number; remaining_seconds: number }> {
+  const { token } = getAuth();
+  const res = await fetch(`${API_URL}/auth/ping`, {
+    method: 'GET',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (res.status === 401) {
+    // sesión inválida/expirada
+    throw new ResponseError('Unauthorized', 401);
+  }
+  if (!res.ok) throw await errorFromResponse(res);
+  return res.json(); // ← ahora sí trae remaining_seconds
+}
+
+
 // ===== Chat =====
 export async function askData(p: {
   token?: string;
@@ -228,6 +248,8 @@ export async function askData(p: {
     }),
   });
 
+  // Mensaje 401 claro (como en V1)
+  if (res.status === 401) throw new ResponseError('No autorizado (JWT inválido).', 401);
   if (!res.ok) throw await errorFromResponse(res);
   return res.json();
 }
@@ -277,7 +299,7 @@ export async function listExcelSheets(path: string): Promise<{ path?: string; sh
 }
 
 export type PreviewResp = {
-  sheet?: { name: string }; // tu backend no siempre lo manda; lo dejo opcional
+  sheet?: { name: string };
   columns: string[];
   rows: (string | number | null)[][];
   page: { offset: number; limit: number; total: number };
