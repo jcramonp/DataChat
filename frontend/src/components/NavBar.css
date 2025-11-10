@@ -129,3 +129,58 @@
   .nav-inner{ grid-template-columns: 1fr auto auto; gap: 10px; }
   .nav-center{ display:none; }
 }
+/* === FULL-WIDTH + FLOATING LOOK === */
+
+/* 1) La barra ya no pinta fondo ni borde: queda “transparente” */
+.dc-nav{
+  position: sticky; top: 0; z-index: 50;
+  background: transparent;          /* antes: var(--nav-bg) */
+  border-bottom: none;               /* antes: 1px solid */
+  box-shadow: none;                  /* antes: var(--nav-shadow) */
+}
+
+/* 2) Contenedor ocupa 100% del viewport */
+.nav-inner{
+  height: var(--nav-h);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  width: 100%;                       /* antes: max-width + margin */
+  max-width: none;
+  margin: 0;
+  padding: 12px 32px;                /* más “aire” a los lados */
+}
+
+/* 3) El rail y los pills flotan sobre el fondo */
+.seg-rail{
+  background: #fff;                  /* mantiene tableta blanca del rail */
+  border: 1px solid var(--rail-border);
+  padding: 8px;
+  border-radius: 999px;
+  box-shadow:
+    0 12px 30px rgba(17, 24, 39, .08),    /* sombra exterior (flota) */
+    inset 0 1px 0 rgba(255,255,255,.6);
+}
+
+/* 4) Botones/idiomas/login también con sombra sutil */
+.nav-pill,
+.lang-pill,
+.btn-gradient,
+.role-badge{
+  box-shadow: 0 8px 22px rgba(17,24,39,.06);
+}
+
+.nav-pill.active, .nav-pill[aria-current="page"],
+.lang-pill.active{
+  box-shadow: 0 12px 26px rgba(108, 92, 231, .25);
+}
+
+/* 5) Empujar el bloque derecho hacia la esquina */
+.nav-right{ justify-content: flex-end; gap: 10px; }
+
+/* 6) En móviles, sigue flotando pero ocultamos el rail por espacio */
+@media (max-width: 900px){
+  .nav-inner{ grid-template-columns: 1fr auto auto; padding: 10px 16px; }
+  .nav-center{ display: none; }
+}
