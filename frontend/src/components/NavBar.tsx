@@ -4,15 +4,13 @@ import Logo from "./Logo";
 import { getAuth, clearAuth } from "../services/api";
 import { useTranslation } from "react-i18next";
 
-const Tab = ({
-  to,
-  active,
-  children,
-}: {
+type TabProps = {
   to: string;
   active: boolean;
   children: React.ReactNode;
-}) => (
+};
+
+const Tab = ({ to, active, children }: TabProps) => (
   <Link
     to={to}
     className={`nav-pill ${active ? "active" : ""}`}
@@ -21,6 +19,15 @@ const Tab = ({
     {children}
   </Link>
 );
+
+// Links tipo “How it works, Privacy…” (se ocultan al estar logueado)
+const EXTRA_LINKS = [
+  { label: "How it works", to: "/" },
+  { label: "Privacy", to: "/" },
+  { label: "Pricing", to: "/" },
+  { label: "About", to: "/" },
+  { label: "Resources", to: "/" },
+];
 
 export default function NavBar() {
   const { pathname } = useLocation();
@@ -31,7 +38,7 @@ export default function NavBar() {
   const { t, i18n } = useTranslation();
   const currentLang = (i18n.language || localStorage.getItem("dc_lang") || "en")
     .slice(0, 2)
-    .toLowerCase();
+    .toLowerCase() as "en" | "es";
 
   const setLang = (lng: "en" | "es") => {
     i18n.changeLanguage(lng);
@@ -45,21 +52,14 @@ export default function NavBar() {
     nav("/login", { replace: true });
   };
 
-  // Links “estilo avaros.ai”; por ahora van a Home
-  const EXTRA_LINKS = [
-    { label: "How it works", to: "/" },
-    { label: "Privacy", to: "/" },
-    { label: "Pricing", to: "/" },
-    { label: "About", to: "/" },
-    { label: "Resources", to: "/" },
-  ];
-
   return (
     <header className="dc-nav">
       <div className="nav-inner">
         {/* Left - Brand */}
         <Link to="/" className="dc-brand" aria-label="DataChat Home">
           <Logo size={34} />
+          {/* Si quieres mostrar texto junto al logo, descomenta: */}
+          {/* <span className="dc-brand-name">DataChat</span> */}
         </Link>
 
         {/* Center - Rail */}
@@ -67,12 +67,13 @@ export default function NavBar() {
           <nav className="seg-rail" aria-label="Primary">
             <Tab to="/" active={is("/")}>{t("nav.home")}</Tab>
 
-            {/* Enlaces extra */}
-            {EXTRA_LINKS.map((l) => (
-              <Tab key={l.label} to={l.to} active={false}>
-                {l.label}
-              </Tab>
-            ))}
+            {/* Enlaces “extra”: solo si NO hay sesión */}
+            {!isAuthed &&
+              EXTRA_LINKS.map((l) => (
+                <Tab key={l.label} to={l.to} active={false}>
+                  {l.label}
+                </Tab>
+              ))}
 
             {/* Rutas según rol */}
             {isAuthed && role !== "admin" && (
@@ -98,7 +99,9 @@ export default function NavBar() {
               </>
             )}
 
-            <Tab to="/faq" active={is("/faq")}>{t("nav2.faq")}</Tab>
+            <Tab to="/faq" active={is("/faq")}>
+              {t("nav2.faq")}
+            </Tab>
           </nav>
         </div>
 
