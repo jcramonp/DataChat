@@ -1,13 +1,26 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import './NavBar.css';
-import Logo from './Logo';
-import { getAuth, clearAuth } from '../services/api';
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import "./NavBar.css";
+import Logo from "./Logo";
+import { getAuth, clearAuth } from "../services/api";
 import { useTranslation } from "react-i18next";
 
-const LANGS = [
-  { code: "en", label: "English" },
-  { code: "es", label: "Español" },
-];
+const Tab = ({
+  to,
+  active,
+  children,
+}: {
+  to: string;
+  active: boolean;
+  children: React.ReactNode;
+}) => (
+  <Link
+    to={to}
+    className={`nav-pill ${active ? "active" : ""}`}
+    aria-current={active ? "page" : undefined}
+  >
+    {children}
+  </Link>
+);
 
 export default function NavBar() {
   const { pathname } = useLocation();
@@ -16,73 +29,85 @@ export default function NavBar() {
   const isAuthed = Boolean(token);
 
   const { t, i18n } = useTranslation();
-  const currentLang = (i18n.language || localStorage.getItem('dc_lang') || "en").slice(0, 2);
+  const currentLang = (i18n.language || localStorage.getItem("dc_lang") || "en")
+    .slice(0, 2)
+    .toLowerCase();
 
-  const isActive = (to: string) => pathname === to;
-
-  const Tab = ({ to, children }: { to: string; children: React.ReactNode }) => (
-    <Link
-      to={to}
-      className={`nav-pill ${isActive(to) ? 'active' : ''}`}
-      aria-current={isActive(to) ? 'page' : undefined}
-    >
-      {children}
-    </Link>
-  );
-
-  const logout = () => {
-    clearAuth();
-    nav('/login', { replace: true });
-  };
-
-  const handleLangChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const lng = e.target.value;
+  const changeLang = (lng: string) => {
     i18n.changeLanguage(lng);
     localStorage.setItem("dc_lang", lng);
   };
 
+  const is = (p: string) => pathname === p;
+
+  const logout = () => {
+    clearAuth();
+    nav("/login", { replace: true });
+  };
+
   return (
     <header className="dc-nav">
-      <div className="container nav-inner">
+      <div className="nav-inner">
+        {/* Left - Brand */}
         <Link to="/" className="dc-brand" aria-label="DataChat Home">
-          <Logo size={30} />
+          <Logo size={34} />
+          {/* Si no quieres texto al lado del logo, borra la línea de abajo */}
+          {/* <span className="dc-brand-name">DataChat</span> */}
         </Link>
 
-        <nav className="dc-tabs" aria-label="Primary">
-          <Tab to="/">{t("nav.home")}</Tab>
+        {/* Center - Rail */}
+        <div className="nav-center">
+          <nav className="seg-rail" aria-label="Primary">
+            <Tab to="/" active={is("/")}>{t("nav.home")}</Tab>
 
-          {/* Rutas según rol */}
-          {isAuthed && role !== 'admin' && <Tab to="/main">{t("nav.main")}</Tab>}
-          {isAuthed && role === 'admin' && <Tab to="/admin">{t("nav.admin")}</Tab>}
-          {isAuthed && role === 'admin' && <Tab to="/admin/users">Users</Tab>}
-          {isAuthed && role === 'admin' && <Tab to="/admin/sessions">Sessions</Tab>}
-          {isAuthed && role === 'admin' && <Tab to="/admin/logs">{t("nav.logs")}</Tab>}
+            {isAuthed && role !== "admin" && (
+              <Tab to="/main" active={is("/main")}>
+                {t("nav.main")}
+              </Tab>
+            )}
 
-          {/* Público */}
-          <Tab to="/faq">{t("nav2.faq")}</Tab>
-        </nav>
+            {isAuthed && role === "admin" && (
+              <>
+                <Tab to="/admin" active={is("/admin")}>
+                  {t("nav.admin")}
+                </Tab>
+                <Tab to="/admin/users" active={is("/admin/users")}>
+                  Users
+                </Tab>
+                <Tab to="/admin/sessions" active={is("/admin/sessions")}>
+                  Sessions
+                </Tab>
+                <Tab to="/admin/logs" active={is("/admin/logs")}>
+                  {t("nav.logs")}
+                </Tab>
+              </>
+            )}
 
-        <div className="navbar-right">
+            <Tab to="/faq" active={is("/faq")}>{t("nav2.faq")}</Tab>
+          </nav>
+        </div>
+
+        {/* Right - Language, role, login/logout */}
+        <div className="nav-right">
           <select
             aria-label={t("language")}
+            className="lang-compact"
             value={currentLang}
-            onChange={handleLangChange}
-            className="navbar-lang"
+            onChange={(e) => changeLang(e.target.value)}
           >
-            {LANGS.map((l) => (
-              <option key={l.code} value={l.code}>{l.label}</option>
-            ))}
+            <option value="en">EN</option>
+            <option value="es">ES</option>
           </select>
 
           {isAuthed ? (
             <>
-              <span className="role-badge">{(role || '').toUpperCase()}</span>
-              <button className="logout-btn" onClick={logout}>
+              <span className="role-badge">{(role || "").toUpperCase()}</span>
+              <button className="btn-solid" onClick={logout}>
                 {t("nav.logout")}
               </button>
             </>
           ) : (
-            <Link to="/login" className="nav-pill">
+            <Link to="/login" className="btn-solid">
               {t("nav.login")}
             </Link>
           )}
