@@ -33,7 +33,7 @@ export default function NavBar() {
     .slice(0, 2)
     .toLowerCase();
 
-  const changeLang = (lng: string) => {
+  const setLang = (lng: "en" | "es") => {
     i18n.changeLanguage(lng);
     localStorage.setItem("dc_lang", lng);
   };
@@ -45,14 +45,21 @@ export default function NavBar() {
     nav("/login", { replace: true });
   };
 
+  // Links “estilo avaros.ai”; por ahora van a Home
+  const EXTRA_LINKS = [
+    { label: "How it works", to: "/" },
+    { label: "Privacy", to: "/" },
+    { label: "Pricing", to: "/" },
+    { label: "About", to: "/" },
+    { label: "Resources", to: "/" },
+  ];
+
   return (
     <header className="dc-nav">
       <div className="nav-inner">
         {/* Left - Brand */}
         <Link to="/" className="dc-brand" aria-label="DataChat Home">
           <Logo size={34} />
-          {/* Si no quieres texto al lado del logo, borra la línea de abajo */}
-          {/* <span className="dc-brand-name">DataChat</span> */}
         </Link>
 
         {/* Center - Rail */}
@@ -60,6 +67,14 @@ export default function NavBar() {
           <nav className="seg-rail" aria-label="Primary">
             <Tab to="/" active={is("/")}>{t("nav.home")}</Tab>
 
+            {/* Enlaces extra */}
+            {EXTRA_LINKS.map((l) => (
+              <Tab key={l.label} to={l.to} active={false}>
+                {l.label}
+              </Tab>
+            ))}
+
+            {/* Rutas según rol */}
             {isAuthed && role !== "admin" && (
               <Tab to="/main" active={is("/main")}>
                 {t("nav.main")}
@@ -87,27 +102,34 @@ export default function NavBar() {
           </nav>
         </div>
 
-        {/* Right - Language, role, login/logout */}
+        {/* Right - EN/ES + Login/Logout + rol */}
         <div className="nav-right">
-          <select
-            aria-label={t("language")}
-            className="lang-compact"
-            value={currentLang}
-            onChange={(e) => changeLang(e.target.value)}
-          >
-            <option value="en">EN</option>
-            <option value="es">ES</option>
-          </select>
+          <div className="lang-buttons" aria-label="Language">
+            <button
+              className={`lang-pill ${currentLang === "en" ? "active" : ""}`}
+              onClick={() => setLang("en")}
+              type="button"
+            >
+              EN
+            </button>
+            <button
+              className={`lang-pill ${currentLang === "es" ? "active" : ""}`}
+              onClick={() => setLang("es")}
+              type="button"
+            >
+              ES
+            </button>
+          </div>
 
           {isAuthed ? (
             <>
               <span className="role-badge">{(role || "").toUpperCase()}</span>
-              <button className="btn-solid" onClick={logout}>
+              <button className="btn-gradient" onClick={logout}>
                 {t("nav.logout")}
               </button>
             </>
           ) : (
-            <Link to="/login" className="btn-solid">
+            <Link to="/login" className="btn-gradient">
               {t("nav.login")}
             </Link>
           )}

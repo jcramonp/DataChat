@@ -6,7 +6,7 @@
 
   /* DataChat identity */
   --dc-primary: #6c5ce7;
-  --dc-primary-2: #a36cf2; /* toque rosado violeta */
+  --dc-primary-2: #a36cf2;
   --dc-dark: #1f232b;
 
   /* Pills */
@@ -18,11 +18,10 @@
   --pill-active-text: #fff;
 
   /* Rail */
-  --rail-bg: #F2EFFA; /* sutil lila muy claro */
+  --rail-bg: #F2EFFA;
   --rail-border: #E8E4F7;
 }
 
-/* ====== Layout nav ====== */
 .dc-nav{
   position: sticky; top: 0; z-index: 50;
   background: var(--nav-bg);
@@ -77,21 +76,44 @@
   box-shadow: 0 6px 18px rgba(90, 76, 230, .25);
 }
 
-/* right: language + role + logout */
+/* right side */
 .nav-right{
   display:flex; align-items:center; justify-content:flex-end;
-  gap: 12px;
+  gap: 10px;
 }
 
-/* “FR” compacto: es un <select> pero se ve como texto */
-.lang-compact{
-  appearance:none; -webkit-appearance:none; -moz-appearance:none;
-  border: 0; background: transparent; cursor: pointer;
-  padding: 0 6px; height: 40px;
-  font-weight: 700; letter-spacing:.5px; color: #353A45;
-  text-transform: uppercase;
+/* EN / ES como pills pequeños */
+.lang-buttons{ display:flex; gap:8px; margin-right: 6px; }
+.lang-pill{
+  height: 32px; padding: 0 12px;
+  display:inline-flex; align-items:center; justify-content:center;
+  border-radius: 999px;
+  border: 1px solid var(--pill-border);
+  background: var(--pill-bg);
+  color: var(--pill-text); font-weight: 700; letter-spacing:.4px;
+  text-decoration: none; cursor: pointer;
+  transition: background .18s ease, box-shadow .18s ease;
 }
-.lang-compact:focus-visible{ outline: 2px solid color-mix(in oklab, var(--dc-primary) 45%, white); outline-offset: 2px; border-radius: 6px; }
+.lang-pill:hover{ background: var(--pill-hover); }
+.lang-pill.active{
+  background: var(--pill-active);
+  color: var(--pill-active-text);
+  border-color: transparent;
+}
+
+/* botón Login/Logout gradiente DataChat */
+.btn-gradient{
+  all: unset;
+  height: 40px; padding: 0 18px;
+  display:inline-flex; align-items:center; justify-content:center;
+  background: linear-gradient(135deg, var(--dc-primary), var(--dc-primary-2));
+  color: #fff; font-weight: 800; border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(108, 92, 231, .35);
+  transition: transform .05s ease, filter .18s ease;
+}
+.btn-gradient:hover{ filter: brightness(1.04); }
+.btn-gradient:active{ transform: translateY(1px); }
 
 /* badge de rol */
 .role-badge{
@@ -102,22 +124,8 @@
   background: #F7F8FC; color: #384152; font-weight: 700;
 }
 
-/* botón sólido tipo “Contact us” */
-.btn-solid{
-  all: unset;
-  height: 40px; padding: 0 18px;
-  display:inline-flex; align-items:center; justify-content:center;
-  background: var(--dc-dark);
-  color: #fff; font-weight: 800; border-radius: 999px;
-  cursor: pointer;
-  box-shadow: 0 8px 22px rgba(22, 24, 32, .22);
-  transition: transform .05s ease, filter .18s ease;
-}
-.btn-solid:hover{ filter: brightness(1.03); }
-.btn-solid:active{ transform: translateY(1px); }
-
 /* responsive pequeño */
 @media (max-width: 900px){
   .nav-inner{ grid-template-columns: 1fr auto auto; gap: 10px; }
-  .nav-center{ display:none; } /* ocultamos el rail en móviles por ahora */
+  .nav-center{ display:none; }
 }
