@@ -8,16 +8,24 @@ const LANGS = [
   { code: "en", label: "English" },
   { code: "es", label: "Español" },
 ];
+
 export default function NavBar() {
   const { pathname } = useLocation();
   const nav = useNavigate();
   const { token, role } = getAuth();
   const isAuthed = Boolean(token);
-  const { i18n } = useTranslation();
-  const currentLang = (i18n.language || "en").slice(0, 2);
+
+  const { t, i18n } = useTranslation();
+  const currentLang = (i18n.language || localStorage.getItem('dc_lang') || "en").slice(0, 2);
+
+  const isActive = (to: string) => pathname === to;
 
   const Tab = ({ to, children }: { to: string; children: React.ReactNode }) => (
-    <Link to={to} className={`nav-pill ${pathname === to ? 'active' : ''}`}>
+    <Link
+      to={to}
+      className={`nav-pill ${isActive(to) ? 'active' : ''}`}
+      aria-current={isActive(to) ? 'page' : undefined}
+    >
       {children}
     </Link>
   );
@@ -36,48 +44,47 @@ export default function NavBar() {
   return (
     <header className="dc-nav">
       <div className="container nav-inner">
-        <div className="dc-brand">
+        <Link to="/" className="dc-brand" aria-label="DataChat Home">
           <Logo size={30} />
-        </div>
+        </Link>
 
-        <nav className="dc-tabs">
-          <Tab to="/">Home</Tab>
+        <nav className="dc-tabs" aria-label="Primary">
+          <Tab to="/">{t("nav.home")}</Tab>
 
           {/* Rutas según rol */}
-          {isAuthed && role !== 'admin' && <Tab to="/main">Main</Tab>}
-          {isAuthed && role === 'admin' && <Tab to="/admin">Admin</Tab>}
+          {isAuthed && role !== 'admin' && <Tab to="/main">{t("nav.main")}</Tab>}
+          {isAuthed && role === 'admin' && <Tab to="/admin">{t("nav.admin")}</Tab>}
           {isAuthed && role === 'admin' && <Tab to="/admin/users">Users</Tab>}
           {isAuthed && role === 'admin' && <Tab to="/admin/sessions">Sessions</Tab>}
+          {isAuthed && role === 'admin' && <Tab to="/admin/logs">{t("nav.logs")}</Tab>}
+
+          {/* Público */}
+          <Tab to="/faq">{t("nav2.faq")}</Tab>
         </nav>
 
-        <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+        <div className="navbar-right">
           <select
-              aria-label="Language"
-              value={currentLang}
-              onChange={handleLangChange}
-              className="nav-pill"
-              style={{paddingRight: 22}} // para verse como los pills
+            aria-label={t("language")}
+            value={currentLang}
+            onChange={handleLangChange}
+            className="navbar-lang"
           >
             {LANGS.map((l) => (
-                <option key={l.code} value={l.code}>
-                  {l.label}
-                </option>
+              <option key={l.code} value={l.code}>{l.label}</option>
             ))}
           </select>
 
           {isAuthed ? (
-              <>
-              <span className="nav-pill" style={{marginRight: 8}}>
-                {(role || '').toUpperCase()}
-              </span>
-                <button className="nav-pill" onClick={logout}>
-                  Logout
-                </button>
-              </>
+            <>
+              <span className="role-badge">{(role || '').toUpperCase()}</span>
+              <button className="logout-btn" onClick={logout}>
+                {t("nav.logout")}
+              </button>
+            </>
           ) : (
-              <Link to="/login" className="nav-pill">
-                Login
-              </Link>
+            <Link to="/login" className="nav-pill">
+              {t("nav.login")}
+            </Link>
           )}
         </div>
       </div>

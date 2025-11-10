@@ -1,14 +1,26 @@
 :root {
   --nav-height: 72px;
   --nav-pad-x: 24px;
+
+  --nav-bg: #ffffff;
+  --nav-border: #e9eaf0;
+  --nav-shadow: 0 6px 24px rgba(16, 24, 40, 0.06);
+
+  --pill-bg: #ffffff;
+  --pill-text: #40455b;
+  --pill-border: #e9eaf0;
+  --pill-hover: rgba(17, 24, 39, 0.05);
+  --pill-active: linear-gradient(135deg, #5b76ff, #d978f2);
+  --pill-active-shadow: 0 6px 18px rgba(100, 80, 200, 0.25);
 }
 
 .dc-nav {
-  background: #ffffff;
+  background: var(--nav-bg);
   position: sticky;
   top: 0;
   z-index: 50;
-  box-shadow: 0 1px 0 rgba(20, 30, 60, 0.06);
+  box-shadow: var(--nav-shadow);
+  border-bottom: 1px solid var(--nav-border);
 }
 
 .nav-inner {
@@ -26,10 +38,11 @@
 
 .dc-tabs {
   display: flex;
-  gap: 14px;
+  gap: 12px;
   background: #ece7f5;
   padding: 8px 10px;
-  border-radius: 24px;
+  border-radius: 999px;
+  align-items: center;
 }
 
 .brand-pill {
@@ -47,17 +60,76 @@
 }
 
 .nav-pill {
-  padding: 10px 18px;
-  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
   text-decoration: none;
   font-weight: 600;
   font-size: 15px;
-  color: #40455b;
-  background: #fff;
+  color: var(--pill-text);
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+  transition: background .18s ease, box-shadow .18s ease, transform .05s ease, color .18s ease;
+  box-shadow: 0 1px 0 rgba(16, 24, 40, 0.02);
 }
 
-.nav-pill.active {
+.nav-pill:hover { background: var(--pill-hover); }
+.nav-pill:active { transform: translateY(1px); }
+
+.nav-pill.active,
+.nav-pill[aria-current="page"] {
   color: #fff;
-  background: linear-gradient(135deg, #5b76ff, #d978f2);
-  box-shadow: 0 3px 10px rgba(100, 80, 200, 0.25);
+  background: var(--pill-active);
+  border-color: transparent;
+  box-shadow: var(--pill-active-shadow);
 }
+
+/* Selector de idioma como pill */
+.navbar-lang {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 36px;
+  padding: 0 28px 0 12px; /* espacio para caret */
+  border-radius: 999px;
+  border: 1px solid var(--pill-border);
+  background: var(--pill-bg);
+  color: var(--pill-text);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .18s ease, box-shadow .18s ease;
+}
+.navbar-lang:hover { background: var(--pill-hover); }
+.navbar-right { display: flex; align-items: center; gap: 8px; }
+
+/* Badge de rol */
+.role-badge {
+  height: 36px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: #f7f8fc;
+  color: #384152;
+  font-weight: 700;
+}
+
+/* Botón logout como pill */
+.logout-btn { all: unset; }
+.logout-btn {
+  height: 36px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 12px;
+  border: 1px solid var(--pill-border);
+  background: var(--pill-bg);
+  color: #4b3fb3;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background .18s ease, box-shadow .18s ease;
+}
+.logout-btn:hover { background: var(--pill-hover); }
