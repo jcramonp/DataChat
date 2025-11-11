@@ -22,7 +22,7 @@ const Tab = ({ to, active, children }: TabProps) => (
 
 // Links tipo “How it works, Privacy…” (se ocultan al estar logueado)
 const EXTRA_LINKS = [
-  { label: "How it works", to: "/" },
+  { label: "How it works", to: "/#how-it-works" },
   { label: "Privacy", to: "/" },
   { label: "Pricing", to: "/" },
   { label: "About", to: "/" },

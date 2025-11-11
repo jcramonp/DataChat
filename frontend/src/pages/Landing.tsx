@@ -69,43 +69,126 @@ export default function Landing() {
   const { done, current } = useTypeSequence(msgs, 26, 900);
 
   return (
-    <main className="landing-hero">
-      {/* Izquierda: título + subtítulo + CTA */}
-      <section className="hero-left">
-        <div className="brand-line">
-          <Logo size={40} withText />
+    <>
+      {/* ===== HERO ===== */}
+      <main className="landing-hero">
+        {/* Izquierda: título + subtítulo + CTA */}
+        <section className="hero-left">
+          <div className="brand-line">
+            <Logo size={40} withText />
+          </div>
+          <h1 className="hero-title">{t("landing.title")}</h1>
+          <p className="hero-sub">{t("landing.subtitle")}</p>
+
+          <Link to={target} className="hero-cta">
+            {t("landing.cta")} <span className="cta-arrow">↗</span>
+          </Link>
+        </section>
+
+        {/* Derecha: demo del chat */}
+        <section className="hero-right">
+          <div className="device">
+            <div className="screen">
+              {done.map((m, i) => (
+                <div key={i} className={`bubble ${m.role} appear`}>
+                  <p>{m.text}</p>
+                </div>
+              ))}
+              {current && (
+                <div className={`bubble ${current.role} typing`}>
+                  <p>
+                    {current.text}
+                    <span className="cursor">|</span>
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="floating q">Q</div>
+          <div className="floating a">A</div>
+        </section>
+      </main>
+
+      {/* ===== HOW IT WORKS (light section) ===== */}
+      <section id="how-it-works" className="hiw">
+        <div className="hiw-header">
+          <span className="hiw-badge">{lang === "es" ? "Cómo funciona" : "How it works"}</span>
+          <h2 className="hiw-title">
+            {lang === "es"
+              ? "De la pregunta a la respuesta en segundos"
+              : "From question to answer in seconds"}
+          </h2>
+          <p className="hiw-sub">
+            {lang === "es"
+              ? "DataChat transforma preguntas en consultas a tu base de datos sin escribir SQL."
+              : "DataChat turns questions into database queries—no SQL needed."}
+          </p>
         </div>
-        <h1 className="hero-title">{t("landing.title")}</h1>
-        <p className="hero-sub">{t("landing.subtitle")}</p>
 
-        <Link to={target} className="hero-cta">
-          {t("landing.cta")} <span className="cta-arrow">↗</span>
-        </Link>
-      </section>
-
-      {/* Derecha: demo del chat */}
-      <section className="hero-right">
-        <div className="device">
-          <div className="screen">
-            {done.map((m, i) => (
-              <div key={i} className={`bubble ${m.role} appear`}>
-                <p>{m.text}</p>
-              </div>
-            ))}
-            {current && (
-              <div className={`bubble ${current.role} typing`}>
+        <div className="hiw-grid">
+          <div className="hiw-steps">
+            <article className="hiw-step">
+              <div className="hiw-num">1</div>
+              <div>
+                <h3>{lang === "es" ? "Haz tu pregunta" : "Ask your question"}</h3>
                 <p>
-                  {current.text}
-                  <span className="cursor">|</span>
+                  {lang === "es"
+                    ? "Escribe en español o inglés. Por ejemplo: “Ventas del Q3 por país”."
+                    : "Type in English or Spanish. For example: “Q3 sales by country.”"}
                 </p>
               </div>
-            )}
+            </article>
+            <article className="hiw-step">
+              <div className="hiw-num">2</div>
+              <div>
+                <h3>{lang === "es" ? "Generamos la consulta" : "We generate the query"}</h3>
+                <p>
+                  {lang === "es"
+                    ? "DataChat crea la consulta y la ejecuta con seguridad sobre tu conexión."
+                    : "DataChat builds and safely runs the query against your connection."}
+                </p>
+              </div>
+            </article>
+            <article className="hiw-step">
+              <div className="hiw-num">3</div>
+              <div>
+                <h3>{lang === "es" ? "Te devolvemos insight" : "We return insights"}</h3>
+                <p>
+                  {lang === "es"
+                    ? "Verás resultados claros: tablas, totales y un resumen listo para compartir."
+                    : "Get clear results—tables, totals, and a share-ready summary."}
+                </p>
+              </div>
+            </article>
+          </div>
+
+          {/* Panel visual a la derecha (mock) */}
+          <div className="hiw-media">
+            <div className="hiw-card">
+              <div className="hiw-wave" />
+              <div className="hiw-card-body">
+                <div className="hiw-chip">{lang === "es" ? "Demo" : "Demo"}</div>
+                <p className="hiw-line">{lang === "es" ? "Usuario: Ventas Q3 por país" : "User: Q3 sales by country"}</p>
+                <div className="hiw-table">
+                  <div className="t-row t-head">
+                    <div>Country</div><div>Sales</div>
+                  </div>
+                  <div className="t-row"><div>USA</div><div>$2.1M</div></div>
+                  <div className="t-row"><div>Mexico</div><div>$1.4M</div></div>
+                  <div className="t-row"><div>Spain</div><div>$980K</div></div>
+                  <div className="t-row"><div>Colombia</div><div>$650K</div></div>
+                </div>
+                <p className="hiw-note">
+                  {lang === "es"
+                    ? "Resumen generado automáticamente a partir de tus datos."
+                    : "Summary auto-generated from your data."}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
-
-        <div className="floating q">Q</div>
-        <div className="floating a">A</div>
       </section>
-    </main>
+    </>
   );
 }
