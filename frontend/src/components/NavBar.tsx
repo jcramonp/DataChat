@@ -8,25 +8,27 @@ type TabProps = {
   to: string;
   active: boolean;
   children: React.ReactNode;
+  onClick?: (e: React.MouseEvent) => void;
 };
 
-const Tab = ({ to, active, children }: TabProps) => (
+const Tab = ({ to, active, children, onClick }: TabProps) => (
   <Link
     to={to}
     className={`nav-pill ${active ? "active" : ""}`}
     aria-current={active ? "page" : undefined}
+    onClick={onClick}
   >
     {children}
   </Link>
 );
 
-// Links tipo “How it works, Privacy…” (se ocultan al estar logueado)
+// Enlaces “públicos” (se ocultan al iniciar sesión)
 const EXTRA_LINKS = [
-  { label: "How it works", to: "/#how-it-works" },
-  { label: "Privacy", to: "/" },
-  { label: "Pricing", to: "/" },
-  { label: "About", to: "/" },
-  { label: "Resources", to: "/" },
+  { label: "How it works", to: "/#how-it-works", id: "how-it-works" },
+  { label: "Privacy", to: "/#privacy", id: "privacy" },
+  { label: "Pricing", to: "/#pricing", id: "pricing" },
+  { label: "About", to: "/", id: undefined },
+  { label: "Resources", to: "/", id: undefined },
 ];
 
 export default function NavBar() {
@@ -52,25 +54,46 @@ export default function NavBar() {
     nav("/login", { replace: true });
   };
 
+  // Maneja scroll suave cuando ya estamos en "/"
+  const handleAnchorClick =
+    (id?: string) =>
+    (e: React.MouseEvent) => {
+      if (pathname !== "/") return; // dejar navegar a /#id
+      e.preventDefault();
+      if (!id) {
+        // Home → top
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+        }
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+
   return (
     <header className="dc-nav">
       <div className="nav-inner">
         {/* Left - Brand */}
-        <Link to="/" className="dc-brand" aria-label="DataChat Home">
+        <Link to="/" className="dc-brand" aria-label="DataChat Home" onClick={handleAnchorClick()}>
           <Logo size={34} />
-          {/* Si quieres mostrar texto junto al logo, descomenta: */}
           {/* <span className="dc-brand-name">DataChat</span> */}
         </Link>
 
         {/* Center - Rail */}
         <div className="nav-center">
           <nav className="seg-rail" aria-label="Primary">
-            <Tab to="/" active={is("/")}>{t("nav.home")}</Tab>
+            <Tab to="/" active={is("/")} onClick={handleAnchorClick()}>
+              {t("nav.home")}
+            </Tab>
 
             {/* Enlaces “extra”: solo si NO hay sesión */}
             {!isAuthed &&
               EXTRA_LINKS.map((l) => (
-                <Tab key={l.label} to={l.to} active={false}>
+                <Tab
+                  key={l.label}
+                  to={l.to}
+                  active={false}
+                  onClick={handleAnchorClick(l.id)}
+                >
                   {l.label}
                 </Tab>
               ))}

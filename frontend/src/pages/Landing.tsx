@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import Logo from "../components/Logo";
 import "../components/NavBar.css";
@@ -59,6 +59,24 @@ function useTypeSequence(all: Msg[], speed = 24, pause = 800) {
   return { done, current, finished: index >= all.length };
 }
 
+/** Utilidad para tarjetas con “spotlight” que sigue el cursor */
+function useSpotlight() {
+  const onMove = (e: MouseEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    const rect = el.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    el.style.setProperty("--mx", `${x}px`);
+    el.style.setProperty("--my", `${y}px`);
+  };
+  const onLeave = (e: MouseEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    el.style.setProperty("--mx", `-100px`);
+    el.style.setProperty("--my", `-100px`);
+  };
+  return { onMove, onLeave };
+}
+
 export default function Landing() {
   const { t, i18n } = useTranslation();
   const { auth } = useAuth();
@@ -67,6 +85,8 @@ export default function Landing() {
   const lang = (i18n.language || "en").slice(0, 2) as "en" | "es";
   const msgs = useMemo(() => MESSAGES[lang], [lang]);
   const { done, current } = useTypeSequence(msgs, 26, 900);
+
+  const { onMove, onLeave } = useSpotlight();
 
   return (
     <>
@@ -110,7 +130,7 @@ export default function Landing() {
         </section>
       </main>
 
-      {/* ===== HOW IT WORKS (light section) ===== */}
+      {/* ===== HOW IT WORKS ===== */}
       <section id="how-it-works" className="hiw">
         <div className="hiw-header">
           <span className="hiw-badge">{lang === "es" ? "Cómo funciona" : "How it works"}</span>
@@ -189,6 +209,146 @@ export default function Landing() {
           </div>
         </div>
       </section>
+
+      {/* ===== PRIVACY ===== */}
+      <section id="privacy" className="privacy">
+        <div className="pv-header">
+          <span className="pv-badge">{lang === "es" ? "Privacidad" : "Privacy"}</span>
+          <h2 className="pv-title">
+            {lang === "es" ? "La seguridad de tus datos es prioridad" : "Your data security comes first"}
+          </h2>
+          <p className="pv-sub">
+            {lang === "es"
+              ? "DataChat nunca usa tus datos para entrenar modelos y aplica controles granulares por conexión."
+              : "DataChat never trains on your data and enforces granular, per-connection controls."}
+          </p>
+        </div>
+
+        <div className="pv-grid">
+          {[
+            {
+              title: lang === "es" ? "No almacenamos tus consultas" : "We don’t store your queries",
+              text:
+                lang === "es"
+                  ? "Solo se conservan metadatos mínimos para auditoría y mejora operativa."
+                  : "We keep minimal metadata for audit and ops improvements only.",
+            },
+            {
+              title: lang === "es" ? "Sin entrenamiento con tus datos" : "No training on your data",
+              text:
+                lang === "es"
+                  ? "Tus datos permanecen en tu infraestructura o conexión configurada."
+                  : "Your data stays within your infra or configured connection.",
+            },
+            {
+              title: lang === "es" ? "Roles y permisos estrictos" : "Strict roles and permissions",
+              text:
+                lang === "es"
+                  ? "Define quién puede consultar, ver tablas o exportar resultados."
+                  : "Define who can query, view tables, or export results.",
+            },
+          ].map((c, i) => (
+            <div key={i} className="pv-card" onMouseMove={onMove} onMouseLeave={onLeave}>
+              <div className="pv-ico" aria-hidden>▦</div>
+              <h3>{c.title}</h3>
+              <p>{c.text}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ===== PRICING ===== */}
+      <section id="pricing" className="pricing">
+        <div className="pr-header">
+          <span className="pr-badge">{lang === "es" ? "Acceso" : "Get access"}</span>
+          <h2 className="pr-title">{lang === "es" ? "Planes de ejemplo" : "Sample pricing plans"}</h2>
+          <p className="pr-sub">
+            {lang === "es"
+              ? "Estos son solo ejemplos. Pásame la info real y los adaptamos."
+              : "Just examples. Share your real info and we’ll adapt them."}
+          </p>
+        </div>
+
+        <div className="pr-grid">
+          {[
+            {
+              name: "Free",
+              price: "$0",
+              desc: lang === "es" ? "Prueba DataChat gratis" : "Try DataChat for free",
+              features: [lang === "es" ? "25 consultas/mes" : "25 queries/month", "Templates básicos"],
+              cta: lang === "es" ? "Empezar" : "Get started",
+              highlight: false,
+            },
+            {
+              name: "Starter",
+              price: "$49",
+              desc: lang === "es" ? "Para equipos pequeños" : "For small teams",
+              features: [lang === "es" ? "100 consultas/mes" : "100 queries/month", "Exportar CSV/Excel"],
+              cta: lang === "es" ? "Elegir Starter" : "Get Starter",
+              highlight: false,
+            },
+            {
+              name: "Standard",
+              price: "$89",
+              desc: lang === "es" ? "Para equipos en producción" : "For production teams",
+              features: [lang === "es" ? "Consultas ilimitadas" : "Unlimited queries", "Roles avanzados", "Soporte prioritario"],
+              cta: lang === "es" ? "Elegir Standard" : "Get Standard",
+              highlight: true,
+            },
+            {
+              name: "Enterprise",
+              price: "Custom",
+              desc: lang === "es" ? "Integraciones y SSO" : "Integrations and SSO",
+              features: [lang === "es" ? "Plantillas personalizadas" : "Custom templates", "Integraciones"],
+              cta: lang === "es" ? "Contactar" : "Get in touch",
+              highlight: false,
+            },
+          ].map((p, i) => (
+            <div key={i} className={`pr-card ${p.highlight ? "is-hot" : ""}`}>
+              <div className="pr-top">
+                <h3>{p.name}</h3>
+                <div className="pr-price">{p.price}</div>
+                <p className="pr-desc">{p.desc}</p>
+              </div>
+              <ul className="pr-list">
+                {p.features.map((f, k) => (
+                  <li key={k}>✓ {f}</li>
+                ))}
+              </ul>
+              <button className="pr-cta">{p.cta}</button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ===== FOOTER ===== */}
+      <footer className="footer">
+        <div className="ft-inner">
+          <div className="ft-brand">
+            <Logo size={26} withText />
+          </div>
+          <nav className="ft-links">
+            <a
+              href="https://legendary-jaborosa-c25.notion.site/DataChat-2a8de7a92e7780a79ccdc6818194a3eb?source=copy_link"
+              target="_blank" rel="noreferrer"
+            >
+              Contact
+            </a>
+            <a
+              href="https://legendary-jaborosa-c25.notion.site/DataChat-2a8de7a92e7780a79ccdc6818194a3eb?source=copy_link"
+              target="_blank" rel="noreferrer"
+            >
+              Terms of Use
+            </a>
+            <a
+              href="https://legendary-jaborosa-c25.notion.site/DataChat-2a8de7a92e7780a79ccdc6818194a3eb?source=copy_link"
+              target="_blank" rel="noreferrer"
+            >
+              Privacy Policy
+            </a>
+          </nav>
+        </div>
+      </footer>
     </>
   );
 }
