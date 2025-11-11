@@ -1,10 +1,12 @@
 import { Link } from "react-router-dom";
-import { useEffect, useMemo, useState, MouseEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { MouseEvent } from "react";           // ✅ type-only import
 import { useTranslation } from "react-i18next";
 import Logo from "../components/Logo";
 import "../components/NavBar.css";
 import "./Landing.css";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "../auth/AuthContext";     // ✅ respeta mayúsculas
+
 /** Mensajes de demo en contexto DataChat (EN/ES) */
 type Msg = { role: "user" | "assistant"; text: string };
 
