@@ -5,7 +5,6 @@ import Logo from "../components/Logo";
 import "../components/NavBar.css";
 import "./Landing.css";
 import { useAuth } from "../auth/AuthContext";
-
 /** Mensajes de demo en contexto DataChat (EN/ES) */
 type Msg = { role: "user" | "assistant"; text: string };
 
