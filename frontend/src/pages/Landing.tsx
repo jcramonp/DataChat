@@ -30,27 +30,26 @@ const MESSAGES = {
 
 /** Hook simple para simular tipeo secuencial */
 function useTypeSequence(all: Msg[], speed = 24, pause = 800) {
-  const [index, setIndex] = useState(0);          // qué mensaje
-  const [typed, setTyped] = useState("");         // texto tipeado del mensaje actual
-  const [done, setDone] = useState<Msg[]>([]);    // mensajes completados
+  const [index, setIndex] = useState(0);
+  const [typed, setTyped] = useState("");
+  const [done, setDone] = useState<Msg[]>([]);
 
   useEffect(() => {
-    if (index >= all.length) return; // terminado
+    if (index >= all.length) return;
     const full = all[index].text;
     let i = 0;
-    setTyped(""); // reiniciar
+    setTyped("");
     const id = setInterval(() => {
       i++;
       setTyped(full.slice(0, i));
       if (i >= full.length) {
         clearInterval(id);
-        // esperar un poco y avanzar
         setTimeout(() => {
           setDone((d) => [...d, all[index]]);
           setIndex((n) => n + 1);
         }, pause);
       }
-    }, Math.max(8, 1000 / speed)); // velocidad a caracteres/seg
+    }, Math.max(8, 1000 / speed));
     return () => clearInterval(id);
   }, [index, all, speed, pause]);
 
@@ -62,8 +61,8 @@ function useTypeSequence(all: Msg[], speed = 24, pause = 800) {
 
 export default function Landing() {
   const { t, i18n } = useTranslation();
-  const { auth } = useAuth(); // rol actual
-  const target = auth.role === "admin" ? "/admin" : "/main"; // destino CTA
+  const { auth } = useAuth();
+  const target = auth.role === "admin" ? "/admin" : "/main";
 
   const lang = (i18n.language || "en").slice(0, 2) as "en" | "es";
   const msgs = useMemo(() => MESSAGES[lang], [lang]);
@@ -80,8 +79,7 @@ export default function Landing() {
         <p className="hero-sub">{t("landing.subtitle")}</p>
 
         <Link to={target} className="hero-cta">
-          {t("landing.cta")}
-          <span className="cta-arrow">↗</span>
+          {t("landing.cta")} <span className="cta-arrow">↗</span>
         </Link>
       </section>
 
@@ -89,13 +87,11 @@ export default function Landing() {
       <section className="hero-right">
         <div className="device">
           <div className="screen">
-            {/* Mensajes ya completados */}
             {done.map((m, i) => (
               <div key={i} className={`bubble ${m.role} appear`}>
                 <p>{m.text}</p>
               </div>
             ))}
-            {/* Mensaje en tipeo */}
             {current && (
               <div className={`bubble ${current.role} typing`}>
                 <p>
@@ -107,7 +103,6 @@ export default function Landing() {
           </div>
         </div>
 
-        {/* burbujas flotantes decorativas estilo “Q/A” */}
         <div className="floating q">Q</div>
         <div className="floating a">A</div>
       </section>
