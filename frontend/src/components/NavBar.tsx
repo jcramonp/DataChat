@@ -23,12 +23,11 @@ const Tab = ({ to, active, children, onClick }: TabProps) => (
 );
 
 // Enlaces “públicos” (se ocultan al iniciar sesión)
+// 🔥 About y Resources eliminados
 const EXTRA_LINKS = [
   { label: "How it works", to: "/#how-it-works", id: "how-it-works" },
   { label: "Privacy", to: "/#privacy", id: "privacy" },
   { label: "Pricing", to: "/#pricing", id: "pricing" },
-  { label: "About", to: "/", id: undefined },
-  { label: "Resources", to: "/", id: undefined },
 ];
 
 export default function NavBar() {
@@ -54,17 +53,16 @@ export default function NavBar() {
     nav("/login", { replace: true });
   };
 
-  // Maneja scroll suave cuando ya estamos en "/"
+  // Scroll suave cuando ya estamos en "/"
   const handleAnchorClick =
     (id?: string) =>
     (e: React.MouseEvent) => {
-      if (pathname !== "/") return; // dejar navegar a /#id
+      if (pathname !== "/") return; // deja navegar a /#id
       e.preventDefault();
       if (!id) {
-        // Home → top
         window.scrollTo({ top: 0, behavior: "smooth" });
         return;
-        }
+      }
       const el = document.getElementById(id);
       if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
     };
@@ -75,7 +73,6 @@ export default function NavBar() {
         {/* Left - Brand */}
         <Link to="/" className="dc-brand" aria-label="DataChat Home" onClick={handleAnchorClick()}>
           <Logo size={34} />
-          {/* <span className="dc-brand-name">DataChat</span> */}
         </Link>
 
         {/* Center - Rail */}
