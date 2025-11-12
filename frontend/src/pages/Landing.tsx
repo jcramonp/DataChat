@@ -1,11 +1,11 @@
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
-import type { MouseEvent } from "react";           // ✅ type-only import
+import type { MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import Logo from "../components/Logo";
 import "../components/NavBar.css";
 import "./Landing.css";
-import { useAuth } from "../auth/AuthContext";     // ✅ respeta mayúsculas
+import { useAuth } from "../auth/AuthContext";
 
 /** Mensajes de demo en contexto DataChat (EN/ES) */
 type Msg = { role: "user" | "assistant"; text: string };
@@ -211,42 +211,42 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ===== PRIVACY ===== */}
+      {/* ===== PRIVACY / SECURITY ===== */}
       <section id="privacy" className="privacy">
         <div className="pv-header">
-          <span className="pv-badge">{lang === "es" ? "Privacidad" : "Privacy"}</span>
+          <span className="pv-badge">{lang === "es" ? "Seguridad" : "Security"}</span>
           <h2 className="pv-title">
-            {lang === "es" ? "La seguridad de tus datos es prioridad" : "Your data security comes first"}
+            {lang === "es" ? "Seguridad real desde el diseño" : "Real security by design"}
           </h2>
           <p className="pv-sub">
             {lang === "es"
-              ? "DataChat nunca usa tus datos para entrenar modelos y aplica controles granulares por conexión."
-              : "DataChat never trains on your data and enforces granular, per-connection controls."}
+              ? "Protegemos tus datos con controles estrictos, sin usar tu información para entrenar modelos."
+              : "We protect your data with strict controls and never train models on your information."}
           </p>
         </div>
 
         <div className="pv-grid">
           {[
             {
-              title: lang === "es" ? "No almacenamos tus consultas" : "We don’t store your queries",
+              title: lang === "es" ? "Secure by design" : "Secure by design",
               text:
                 lang === "es"
-                  ? "Solo se conservan metadatos mínimos para auditoría y mejora operativa."
-                  : "We keep minimal metadata for audit and ops improvements only.",
+                  ? "Solo los administradores pueden cargar o conectar bases de datos/hojas de cálculo; los usuarios estándar están restringidos a consultas de solo lectura. Así evitamos cambios no autorizados."
+                  : "Only administrators can upload or connect databases/spreadsheets; standard users are restricted to read-only queries. This prevents unauthorized changes.",
             },
             {
-              title: lang === "es" ? "Sin entrenamiento con tus datos" : "No training on your data",
+              title: lang === "es" ? "La IA no reutiliza tu información" : "AI doesn’t reuse your data",
               text:
                 lang === "es"
-                  ? "Tus datos permanecen en tu infraestructura o conexión configurada."
-                  : "Your data stays within your infra or configured connection.",
+                  ? "Nos aseguramos de que la IA no entrene ni se alimente de la información que le suministras."
+                  : "We ensure the AI does not train on or reuse the information you provide.",
             },
             {
-              title: lang === "es" ? "Roles y permisos estrictos" : "Strict roles and permissions",
+              title: lang === "es" ? "Seguridad con JWT" : "JWT-based security",
               text:
                 lang === "es"
-                  ? "Define quién puede consultar, ver tablas o exportar resultados."
-                  : "Define who can query, view tables, or export results.",
+                  ? "Cada usuario cuenta con un token JWT para autenticación y autorización seguras."
+                  : "Each user has a JWT token for secure authentication and authorization.",
             },
           ].map((c, i) => (
             <div key={i} className="pv-card" onMouseMove={onMove} onMouseLeave={onLeave}>
@@ -258,57 +258,60 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ===== PRICING ===== */}
+      {/* ===== PRICING (2 planes) ===== */}
       <section id="pricing" className="pricing">
         <div className="pr-header">
-          <span className="pr-badge">{lang === "es" ? "Acceso" : "Get access"}</span>
-          <h2 className="pr-title">{lang === "es" ? "Planes de ejemplo" : "Sample pricing plans"}</h2>
+          <span className="pr-badge">{lang === "es" ? "Planes" : "Plans"}</span>
+          <h2 className="pr-title">
+            {lang === "es" ? "SaaS simple: Free y Pro" : "Simple SaaS: Free & Pro"}
+          </h2>
           <p className="pr-sub">
             {lang === "es"
-              ? "Estos son solo ejemplos. Pásame la info real y los adaptamos."
-              : "Just examples. Share your real info and we’ll adapt them."}
+              ? "Nuestro go-to-market es digital: ofrecemos un plan gratuito con límites para generar interés, junto con contenido educativo y referidos que impulsan la conversión al plan Pro."
+              : "Our go-to-market is digital: we offer a free tier with limits to spark interest, plus referrals and short educational content that drive upgrades to Pro."}
           </p>
         </div>
 
-        <div className="pr-grid">
+        <div className="pr-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
           {[
             {
               name: "Free",
               price: "$0",
-              desc: lang === "es" ? "Prueba DataChat gratis" : "Try DataChat for free",
-              features: [lang === "es" ? "25 consultas/mes" : "25 queries/month", "Templates básicos"],
-              cta: lang === "es" ? "Empezar" : "Get started",
+              desc:
+                lang === "es"
+                  ? "Free tier con límites para probar DataChat y enamorarte."
+                  : "Free tier with limits to try DataChat and get hooked.",
+              features: [
+                lang === "es" ? "Consultas limitadas/mes" : "Limited queries/month",
+                lang === "es" ? "Plantillas básicas" : "Basic templates",
+                lang === "es" ? "Contenido educativo corto (YouTube/LinkedIn)" : "Short educational content (YouTube/LinkedIn)",
+                lang === "es" ? "Programa de referidos" : "Referral incentives",
+              ],
+              cta: lang === "es" ? "Empezar gratis" : "Start free",
               highlight: false,
             },
             {
-              name: "Starter",
+              name: "Pro",
               price: "$49",
-              desc: lang === "es" ? "Para equipos pequeños" : "For small teams",
-              features: [lang === "es" ? "100 consultas/mes" : "100 queries/month", "Exportar CSV/Excel"],
-              cta: lang === "es" ? "Elegir Starter" : "Get Starter",
-              highlight: false,
-            },
-            {
-              name: "Standard",
-              price: "$89",
-              desc: lang === "es" ? "Para equipos en producción" : "For production teams",
-              features: [lang === "es" ? "Consultas ilimitadas" : "Unlimited queries", "Roles avanzados", "Soporte prioritario"],
-              cta: lang === "es" ? "Elegir Standard" : "Get Standard",
+              desc:
+                lang === "es"
+                  ? "Acceso completo a todas las funciones. Suscripción mensual por cliente."
+                  : "Full access to every feature. Monthly subscription per client.",
+              features: [
+                lang === "es" ? "Todas las features sin límites" : "All features, no limits",
+                lang === "es" ? "Renovación mensual" : "Renews monthly",
+                lang === "es" ? "Soporte prioritario" : "Priority support",
+              ],
+              cta: lang === "es" ? "Elegir Pro" : "Choose Pro",
               highlight: true,
-            },
-            {
-              name: "Enterprise",
-              price: "Custom",
-              desc: lang === "es" ? "Integraciones y SSO" : "Integrations and SSO",
-              features: [lang === "es" ? "Plantillas personalizadas" : "Custom templates", "Integraciones"],
-              cta: lang === "es" ? "Contactar" : "Get in touch",
-              highlight: false,
             },
           ].map((p, i) => (
             <div key={i} className={`pr-card ${p.highlight ? "is-hot" : ""}`}>
               <div className="pr-top">
                 <h3>{p.name}</h3>
-                <div className="pr-price">{p.price}</div>
+                <div className="pr-price">
+                  {p.name === "Pro" ? `${p.price}/mo` : p.price}
+                </div>
                 <p className="pr-desc">{p.desc}</p>
               </div>
               <ul className="pr-list">
