@@ -284,8 +284,6 @@ export default function Landing() {
               features: [
                 lang === "es" ? "Consultas limitadas/mes" : "Limited queries/month",
                 lang === "es" ? "Plantillas básicas" : "Basic templates",
-                lang === "es" ? "Contenido educativo corto (YouTube/LinkedIn)" : "Short educational content (YouTube/LinkedIn)",
-                lang === "es" ? "Programa de referidos" : "Referral incentives",
               ],
               cta: lang === "es" ? "Empezar gratis" : "Start free",
               highlight: false,
