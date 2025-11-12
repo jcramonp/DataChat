@@ -15,7 +15,6 @@ const AuthCtx = createContext<AuthContextValue>({
   logout: () => {},
 });
 
-// 🔹 Decodifica el rol desde el JWT si la API no lo envía
 function getRoleFromToken(token?: string | null): Role {
   if (!token) return null;
   try {
@@ -45,7 +44,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     else localStorage.removeItem("dc_role");
   }, [auth]);
 
-  // ✅ borra storage inmediatamente y limpia estado
   const logout = () => {
     localStorage.removeItem("dc_token");
     localStorage.removeItem("dc_role");

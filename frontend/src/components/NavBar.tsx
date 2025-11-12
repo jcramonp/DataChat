@@ -22,8 +22,7 @@ const Tab = ({ to, active, children, onClick }: TabProps) => (
   </Link>
 );
 
-// Enlaces “públicos” (se ocultan al iniciar sesión)
-// 🔥 About y Resources eliminados
+// Links públicos (para el landing)
 const EXTRA_LINKS = [
   { label: "How it works", to: "/#how-it-works", id: "how-it-works" },
   { label: "Privacy", to: "/#privacy", id: "privacy" },
@@ -53,11 +52,10 @@ export default function NavBar() {
     nav("/login", { replace: true });
   };
 
-  // Scroll suave cuando ya estamos en "/"
   const handleAnchorClick =
     (id?: string) =>
     (e: React.MouseEvent) => {
-      if (pathname !== "/") return; // deja navegar a /#id
+      if (pathname !== "/") return;
       e.preventDefault();
       if (!id) {
         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -70,19 +68,27 @@ export default function NavBar() {
   return (
     <header className="dc-nav">
       <div className="nav-inner">
-        {/* Left - Brand */}
-        <Link to="/" className="dc-brand" aria-label="DataChat Home" onClick={handleAnchorClick()}>
+        {/* Brand */}
+        <Link
+          to="/"
+          className="dc-brand"
+          aria-label="DataChat Home"
+          onClick={handleAnchorClick()}
+        >
           <Logo size={34} />
         </Link>
 
-        {/* Center - Rail */}
+        {/* Center */}
         <div className="nav-center">
           <nav className="seg-rail" aria-label="Primary">
-            <Tab to="/" active={is("/")} onClick={handleAnchorClick()}>
-              {t("nav.home")}
-            </Tab>
+            {/* ⛳️ Ocultamos INICIO cuando hay sesión (especialmente admin) */}
+            {!isAuthed && (
+              <Tab to="/" active={is("/")} onClick={handleAnchorClick()}>
+                {t("nav.home")}
+              </Tab>
+            )}
 
-            {/* Enlaces “extra”: solo si NO hay sesión */}
+            {/* Enlaces de landing solo cuando NO hay sesión */}
             {!isAuthed &&
               EXTRA_LINKS.map((l) => (
                 <Tab
@@ -125,7 +131,7 @@ export default function NavBar() {
           </nav>
         </div>
 
-        {/* Right - EN/ES + Login/Logout + rol */}
+        {/* Right */}
         <div className="nav-right">
           <div className="lang-buttons" aria-label="Language">
             <button
